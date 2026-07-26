@@ -128,6 +128,7 @@ header {
     <div id="fiyatlar-tab" class="tab-content active">
         <div class="calc-card" style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);" id="data-source">Kaynak: Yükleniyor...</span>
+            <span id="live-badge" style="display:none; font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px; margin-left:6px;"></span>
             <button style="background:var(--primary); color:white; border:none; padding:7px 12px; border-radius:10px; font-size:11px; font-weight:700; cursor:pointer; box-shadow: 0 2px 8px rgba(2,132,199,0.3);" onclick="konumumuBul()">📍 Konumumu Kullan</button>
         </div>
         
@@ -503,16 +504,34 @@ async function ilDegisti() {
 
 async function fiyatlariGetir() {
     const il = document.getElementById('il-select').value;
+    document.getElementById('data-source').innerText = 'Kaynak: Yükleniyor...';
+    document.getElementById('live-badge').style.display = 'none';
     try {
         const response = await fetch(`/api/fiyatlar?il=${il}`);
         const res = await response.json();
         if(res.status === 'success' && res.markalar) {
-            document.getElementById('data-source').innerText = `Kaynak: ${res.source}`;
+            // Kaynak + güncelleme zamanı
+            const zaman = res.guncelleme ? ` · ${res.guncelleme}` : '';
+            document.getElementById('data-source').innerText = `Kaynak: ${res.source}${zaman}`;
+            // Canlı / cache rozeti
+            const badge = document.getElementById('live-badge');
+            if(res.canli) {
+                badge.innerText = '🟢 Canlı';
+                badge.style.background = '#dcfce7';
+                badge.style.color = '#16a34a';
+            } else {
+                badge.innerText = '🟡 Önbellek';
+                badge.style.background = '#fef9c3';
+                badge.style.color = '#a16207';
+            }
+            badge.style.display = 'inline';
             globalMarkalar = res.markalar;
             kartlariOlustur(globalMarkalar);
             if(globalStations.length > 0) haritadaGoster(globalStations);
         }
-    } catch(e) {}
+    } catch(e) {
+        document.getElementById('data-source').innerText = 'Kaynak: Bağlantı hatası';
+    }
 }
 
 function kartlariOlustur(markalar) {
