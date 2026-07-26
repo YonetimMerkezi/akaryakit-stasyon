@@ -2,3 +2,4 @@ flask
 gunicorn
 beautifulsoup4
 requests
+python-dotenv
