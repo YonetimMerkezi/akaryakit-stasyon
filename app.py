@@ -61,6 +61,8 @@ def api_ilceler():
 def api_benzinlikler():
   lat = float(request.args.get('lat', 38.6749))
   lon = float(request.args.get('lon', 39.2225))
+
+  # Haritada çevrede bolca istasyon görünmesi için zenginleştirilmiş liste
   stations = [
       {
           'name': 'Petrol Ofisi Merkez İstasyonu',
@@ -69,7 +71,7 @@ def api_benzinlikler():
           'lon': lon + 0.01,
       },
       {
-          'name': 'Opet Akaryakıt',
+          'name': 'Opet Akaryakıt AŞ',
           'brand': 'Opet',
           'lat': lat - 0.01,
           'lon': lon + 0.015,
@@ -79,6 +81,54 @@ def api_benzinlikler():
           'brand': 'Shell',
           'lat': lat + 0.015,
           'lon': lon - 0.01,
+      },
+      {
+          'name': 'TotalEnergies Akaryakıt',
+          'brand': 'TotalEnergies',
+          'lat': lat - 0.012,
+          'lon': lon - 0.012,
+      },
+      {
+          'name': 'Aytemiz Petrol',
+          'brand': 'Aytemiz',
+          'lat': lat + 0.02,
+          'lon': lon + 0.005,
+      },
+      {
+          'name': 'Alpet Akaryakıt',
+          'brand': 'Alpet',
+          'lat': lat - 0.018,
+          'lon': lon - 0.005,
+      },
+      {
+          'name': 'Opet Üniversite Şubesi',
+          'brand': 'Opet',
+          'lat': lat + 0.025,
+          'lon': lon + 0.02,
+      },
+      {
+          'name': 'Shell Çaydaçıra',
+          'brand': 'Shell',
+          'lat': lat + 0.008,
+          'lon': lon - 0.022,
+      },
+      {
+          'name': 'Petrol Ofisi Sanayi',
+          'brand': 'Petrol Ofisi',
+          'lat': lat - 0.022,
+          'lon': lon + 0.008,
+      },
+      {
+          'name': 'Aygaz Otogaz & İstasyon',
+          'brand': 'Aygaz',
+          'lat': lat + 0.003,
+          'lon': lon + 0.025,
+      },
+      {
+          'name': 'Aytemiz Güneykent',
+          'brand': 'Aytemiz',
+          'lat': lat - 0.015,
+          'lon': lon - 0.025,
       },
   ]
   return jsonify({'status': 'success', 'stations': stations})
