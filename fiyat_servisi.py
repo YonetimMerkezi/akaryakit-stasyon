@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 CACHE_DOSYASI = Path(__file__).parent / 'fiyat_cache.json'
 CACHE_TTL_SAAT = int(os.environ.get('CACHE_TTL_SAAT', 6))
 COLLECT_API_KEY = os.environ.get('COLLECT_API_KEY', '')
+# Cloudflare Worker (akaryakit.org scraper) — sonunda / OLMADAN gir
+# örn: https://akaryakit-worker.KULLANICI-ADIN.workers.dev
+WORKER_URL = os.environ.get('WORKER_URL', 'https://okul-ai-asistan.sedonet23.workers.dev').rstrip('/')
 
 # İl adı → URL slug eşlemesi (Opet ve benzeri siteler için)
 IL_SLUG_MAP = {
@@ -151,6 +154,53 @@ def _session_olustur(referer_url: str = '') -> requests.Session:
         headers['Referer'] = referer_url
     s.headers.update(headers)
     return s
+
+
+# ─── Kaynak 0: Cloudflare Worker (akaryakit.org) ──────────────────────────────
+
+def _worker_cek(il: str) -> tuple[list | None, str]:
+    """
+    Cloudflare Worker üzerinden akaryakit.org'dan il bazlı firma fiyatlarını çeker.
+    Worker, CORS ve bot-koruması sorunlarını aşmak için proxy görevi görür.
+    Ortam değişkeni: WORKER_URL (örn: https://xxx.workers.dev)
+    """
+    if not WORKER_URL:
+        return None, ''
+    try:
+        slug = IL_SLUG_MAP.get(il.lower(), il.lower())
+        r = requests.get(
+            WORKER_URL,
+            params={'il': slug, 'mod': 'detay'},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            logger.warning('Worker HTTP %d', r.status_code)
+            return None, ''
+
+        data = r.json()
+        if not data.get('basari'):
+            logger.warning('Worker başarısız yanıt: %s', data.get('hata'))
+            return None, ''
+
+        markalar = []
+        for m in data.get('markalar', []):
+            benzin = m.get('benzin')
+            motorin = m.get('motorin')
+            lpg = m.get('lpg')
+            firma = (m.get('firma') or '').strip()
+            if firma and (benzin or motorin):
+                markalar.append({
+                    'firma': firma,
+                    'benzin': benzin,
+                    'motorin': motorin,
+                    'lpg': lpg,
+                })
+
+        if markalar:
+            return markalar, 'akaryakit.org (Worker)'
+    except Exception as e:
+        logger.error('Worker hatası: %s', e)
+    return None, ''
 
 
 # ─── Kaynak 1: CollectAPI ─────────────────────────────────────────────────────
@@ -449,6 +499,7 @@ def _petrolofisi_cek(il: str) -> tuple[list | None, str]:
 # ─── Ana servis fonksiyonu ────────────────────────────────────────────────────
 
 _KAYNAKLAR = [
+    ('Worker', _worker_cek),
     ('CollectAPI', _collectapi_cek),
     ('Opet', _opet_cek),
     ('Alpet', _alpet_cek),
