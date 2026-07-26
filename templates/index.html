@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akaryakıt Fiyatları - Elazığ</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,Helvetica,sans-serif;
+}
+
+body{
+    background:#f2f5f8;
+}
+
+header{
+    background:#1565C0;
+    color:#fff;
+    padding:18px;
+    text-align:center;
+}
+
+.info{
+    padding:15px;
+    display:flex;
+    justify-content:space-between;
+    font-size:14px;
+    color:#666;
+}
+
+.card{
+    background:#fff;
+    margin:12px;
+    border-radius:16px;
+    box-shadow:0 4px 10px rgba(0,0,0,.08);
+    overflow:hidden;
+}
+
+.card-header{
+    background:#1976D2;
+    color:white;
+    padding:14px;
+    font-size:18px;
+    font-weight:bold;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#ECEFF1;
+    padding:12px;
+}
+
+td{
+    padding:12px;
+    text-align:center;
+    border-top:1px solid #eee;
+}
+
+.lowest{
+    background-color: #E8F5E9;
+    color:#2E7D32;
+    font-weight:bold;
+}
+
+button{
+    width:calc(100% - 24px);
+    margin:15px 12px;
+    border:none;
+    border-radius:12px;
+    padding:15px;
+    background:#43A047;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+    transition: background 0.3s;
+}
+
+button:disabled{
+    background:#9E9E9E;
+    cursor:not-allowed;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>⛽ Akaryakıt Fiyatları</h2>
+</header>
+
+<div class="info">
+<div>📍 Elazığ</div>
+<div id="guncelleme-tarihi">Yükleniyor...</div>
+</div>
+
+<!-- Benzin Kartı -->
+<div class="card">
+<div class="card-header">Kurşunsuz Benzin 95</div>
+<table>
+<thead>
+<tr><th>Firma</th><th>Fiyat</th></tr>
+</thead>
+<tbody id="benzin-tbody">
+<tr><td colspan="2">Veriler yükleniyor...</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- Motorin Kartı -->
+<div class="card">
+<div class="card-header">Motorin</div>
+<table>
+<thead>
+<tr><th>Firma</th><th>Fiyat</th></tr>
+</thead>
+<tbody id="motorin-tbody">
+<tr><td colspan="2">Veriler yükleniyor...</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- LPG Kartı -->
+<div class="card">
+<div class="card-header">LPG</div>
+<table>
+<thead>
+<tr><th>Firma</th><th>Fiyat</th></tr>
+</thead>
+<tbody id="lpg-tbody">
+<tr><td colspan="2">Veriler yükleniyor...</td></tr>
+</tbody>
+</table>
+</div>
+
+<button id="btn-guncelle" onclick="fiyatlariGetir()">
+🔄 Fiyatları Güncelle
+</button>
+
+<script>
+async function fiyatlariGetir() {
+    const btn = document.getElementById('btn-guncelle');
+    btn.disabled = true;
+    btn.innerText = "⏳ Veriler Alınıyor...";
+
+    try {
+        const response = await fetch('/api/fiyatlar');
+        const res = await response.json();
+
+        if(res.status === 'success' || res.status === 'warning') {
+            document.getElementById('guncelleme-tarihi').innerText = res.tarih;
+            tablolariDoldur(res.markalar);
+        } else {
+            alert("Fiyatlar çekilemedi!");
+        }
+    } catch (error) {
+        console.error("Hata:", error);
+        alert("Bağlantı hatası oluştu.");
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "🔄 Fiyatları Güncelle";
+    }
+}
+
+function tablolariDoldur(markalar) {
+    const benzinTbody = document.getElementById('benzin-tbody');
+    const motorinTbody = document.getElementById('motorin-tbody');
+    const lpgTbody = document.getElementById('lpg-tbody');
+
+    // En düşük fiyatları bulalım
+    const minBenzin = Math.min(...markalar.map(m => m.benzin).filter(Boolean));
+    const minMotorin = Math.min(...markalar.map(m => m.motorin).filter(Boolean));
+    const minLpg = Math.min(...markalar.map(m => m.lpg).filter(Boolean));
+
+    benzinTbody.innerHTML = '';
+    motorinTbody.innerHTML = '';
+    lpgTbody.innerHTML = '';
+
+    markalar.forEach(item => {
+        // Benzin Satırı
+        if(item.benzin) {
+            const isLowest = item.benzin === minBenzin;
+            benzinTbody.innerHTML += `
+                <tr class="${isLowest ? 'lowest' : ''}">
+                    <td>${item.firma} ${isLowest ? '⭐' : ''}</td>
+                    <td>${item.benzin.toFixed(2)} ₺</td>
+                </tr>`;
+        }
+
+        // Motorin Satırı
+        if(item.motorin) {
+            const isLowest = item.motorin === minMotorin;
+            motorinTbody.innerHTML += `
+                <tr class="${isLowest ? 'lowest' : ''}">
+                    <td>${item.firma} ${isLowest ? '⭐' : ''}</td>
+                    <td>${item.motorin.toFixed(2)} ₺</td>
+                </tr>`;
+        }
+
+        // LPG Satırı
+        if(item.lpg) {
+            const isLowest = item.lpg === minLpg;
+            lpgTbody.innerHTML += `
+                <tr class="${isLowest ? 'lowest' : ''}">
+                    <td>${item.firma} ${isLowest ? '⭐' : ''}</td>
+                    <td>${item.lpg.toFixed(2)} ₺</td>
+                </tr>`;
+        }
+    });
+}
+
+// Sayfa açıldığında otomatik verileri çek
+window.onload = fiyatlariGetir;
+</script>
+
+</body>
+</html>
