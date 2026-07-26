@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Arka Plan (iOS / Androidsquircle stilinde köşe yumuşatma) -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)"/>
+  
+  <!-- Çerçeve Detayı -->
+  <rect x="36" y="36" width="440" height="440" rx="90" fill="none" stroke="#334155" stroke-width="4"/>
+
+  <!-- Akaryakıt Pompası ve Tabanca Simgesi -->
+  <g transform="translate(136, 116)">
+    <!-- Pompa Gövdesi -->
+    <path d="M60 40 H180 V240 C180 255 165 270 150 270 H90 C75 270 60 255 60 240 Z" fill="url(#accentGrad)" opacity="0.95"/>
+    <!-- Ekran Alanı -->
+    <rect x="85" y="70" width="70" height="50" rx="8" fill="#090d16"/>
+    <text x="120" y="103" font-family="Arial, sans-serif" font-weight="bold" font-size="24" fill="#38bdf8" text-anchor="middle">₺</text>
+    
+    <!-- Hortum ve Tabanca -->
+    <path d="M180 100 H210 C230 100 245 115 245 135 V190 C245 210 230 225 210 225 H190" fill="none" stroke="#f59e0b" stroke-width="16" stroke-linecap="round"/>
+    <path d="M190 225 L160 260 L145 245 L175 210 Z" fill="#f59e0b"/>
+  </g>
+
+  <!-- Sağ Üst Rozet (Yakıt Sembolü) -->
+  <circle cx="390" cy="120" r="35" fill="#f59e0b" opacity="0.95"/>
+  <text x="390" y="132" font-family="Arial, sans-serif" font-size="30" text-anchor="middle" fill="#ffffff">⛽</text>
+</svg>
