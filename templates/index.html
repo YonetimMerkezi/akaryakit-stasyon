@@ -38,7 +38,6 @@ header {
 .city-select, .district-select { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.25); padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; outline: none; cursor: pointer; }
 .city-select option, .district-select option { color: #000; background: #fff; }
 
-/* Sekmeler (Tabs) */
 .nav-tabs { display: flex; background: rgba(255,255,255,0.08); padding: 4px; border-radius: 12px; margin-top: 10px; gap: 4px; }
 .tab-btn { flex: 1; background: none; border: none; color: #94a3b8; padding: 8px; font-size: 11px; font-weight: 700; border-radius: 9px; cursor: pointer; text-align: center; transition: all 0.2s; }
 .tab-btn.active { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(2,132,199,0.3); }
@@ -112,7 +111,6 @@ header {
             </select>
         </div>
     </div>
-    <!-- Sekme Butonları -->
     <div class="nav-tabs">
         <button class="tab-btn active" onclick="sekmeDegis('fiyatlar-tab', this)">📊 Fiyatlar & Harita</button>
         <button class="tab-btn" onclick="sekmeDegis('rota-tab', this)">🗺️ Rota & Maliyet</button>
@@ -121,8 +119,6 @@ header {
 </header>
 
 <div class="container">
-    
-    <!-- SEKME 1: FİYATLAR & HARİTA -->
     <div id="fiyatlar-tab" class="tab-content active">
         <div class="calc-card" style="padding: 12px; display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);" id="data-source">Kaynak: Yükleniyor...</span>
@@ -149,7 +145,6 @@ header {
         <button class="btn-main" onclick="fiyatlariGetir()">🔄 Fiyatları Güncelle</button>
     </div>
 
-    <!-- SEKME 2: ROTA & MALİYET -->
     <div id="rota-tab" class="tab-content">
         <div class="calc-card">
             <div class="calc-title">🚗 Karayolu Rota ve Yakıt Hesaplayıcı</div>
@@ -179,9 +174,7 @@ header {
         <div id="rota-maliyet-listesi"></div>
     </div>
 
-    <!-- SEKME 3: ARAÇ & YAKIT DEFTERİ -->
     <div id="arac-tab" class="tab-content">
-        <!-- İstatistik Kutuları -->
         <div class="stats-grid">
             <div class="stat-box">
                 <div class="stat-title">Toplam Harcama</div>
@@ -197,47 +190,57 @@ header {
             </div>
         </div>
 
-        <!-- Araç Profili Kartı -->
         <div class="calc-card">
-            <div class="calc-title">🚙 Araç Ayarları</div>
+            <div class="calc-title">🚙 Araç Ayarları & Çoklu Depo</div>
             <div class="route-inputs">
-                <div class="route-field"><label>Araç Adı / Model</label><input type="text" id="arac-adi" placeholder="Örn: Megane Diesel"></div>
-                <div class="route-field"><label>Yakıt Türü</label>
-                    <select id="arac-yakit-turu">
-                        <option value="motorin">Motorin</option>
-                        <option value="benzin">Benzin</option>
-                        <option value="lpg">LPG</option>
-                    </select>
+                <div class="route-field"><label>Araç Adı / Model</label><input type="text" id="arac-adi" placeholder="Örn: Megane LPG+Benzin"></div>
+                <div class="route-field"><label>Mevcut Kilometre</label><input type="number" id="arac-km" placeholder="45000"></div>
+            </div>
+            
+            <div style="margin-top: 8px;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Aracın Yakıt Türleri (Çoklu Seçim)</label>
+                <div style="display: flex; gap: 16px; background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid var(--border);">
+                    <label style="font-size:12px; font-weight:700; display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="yakit-benzin-sec" value="benzin"> Benzin</label>
+                    <label style="font-size:12px; font-weight:700; display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="yakit-motorin-sec" value="motorin"> Motorin</label>
+                    <label style="font-size:12px; font-weight:700; display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="yakit-lpg-sec" value="lpg"> LPG</label>
                 </div>
             </div>
+
             <div class="route-inputs" style="margin-top: 8px;">
-                <div class="route-field"><label>Depo Hacmi (Lt)</label><input type="number" id="arac-depo" placeholder="50"></div>
-                <div class="route-field"><label>Mevcut Kilometre</label><input type="number" id="arac-km" placeholder="45000"></div>
+                <div class="route-field"><label>Benzin Depo (Lt)</label><input type="number" id="arac-depo-benzin" placeholder="45"></div>
+                <div class="route-field"><label>LPG Depo (Lt)</label><input type="number" id="arac-depo-lpg" placeholder="40"></div>
             </div>
             <button class="btn-main" style="margin-top:8px; padding:8px;" onclick="aracBilgisiniKaydet()">💾 Araç Bilgilerini Kaydet</button>
         </div>
 
-        <!-- Yakıt Alım Kaydı Ekleme -->
         <div class="calc-card">
             <div class="calc-title">⛽ Yeni Yakıt Alımı Ekle</div>
-            <div class="route-field" style="margin-bottom:8px;">
-                <label>İstasyon Adı (Otomatik veya Manuel)</label>
-                <input type="text" id="yakit-istasyon" placeholder="Konumdan otomatik alınır ya da yazılır...">
+            <div class="route-inputs" style="margin-bottom:8px;">
+                <div class="route-field">
+                    <label>Hangi Depoya Alındı?</label>
+                    <select id="log-yakit-turu">
+                        <option value="Benzin">Benzin</option>
+                        <option value="Motorin">Motorin</option>
+                        <option value="LPG">LPG</option>
+                    </select>
+                </div>
+                <div class="route-field">
+                    <label>İstasyon Adı</label>
+                    <input type="text" id="yakit-istasyon" placeholder="Konumdan otomatik veya manuel...">
+                </div>
             </div>
             <div class="route-inputs">
-                <div class="route-field"><label>Alınan Litre</label><input type="number" id="yakit-litre" step="0.01" placeholder="Örn: 40"></div>
-                <div class="route-field"><label>Toplam Tutar (₺)</label><input type="number" id="yakit-tutar" step="0.01" placeholder="Örn: 1700"></div>
+                <div class="route-field"><label>Alınan Litre</label><input type="number" id="yakit-litre" step="0.01" placeholder="Örn: 30"></div>
+                <div class="route-field"><label>Toplam Tutar (₺)</label><input type="number" id="yakit-tutar" step="0.01" placeholder="Örn: 1200"></div>
             </div>
-            <button class="btn-main btn-success" onclick="yakitAlimiKaydet()">➕ Yakıt Alımını Kaydet ve Ekle</button>
+            <button class="btn-main btn-success" onclick="yakitAlimiKaydet()">➕ Yakıt Alımını Kaydet</button>
         </div>
 
-        <!-- Geçmiş Alımlar -->
         <div class="calc-card">
             <div class="calc-title">📋 Yakıt Alım Geçmişi</div>
             <div id="yakit-gecmis-listesi" style="font-size: 12px; color: var(--text-muted);">Henüz yakıt alımı kaydedilmemiş.</div>
         </div>
     </div>
-
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -252,7 +255,7 @@ let favorites = JSON.parse(localStorage.getItem('fuel_favs') || '[]');
 let customBrands = JSON.parse(localStorage.getItem('station_custom_brands') || '{}');
 let eskiFiyatlar = JSON.parse(localStorage.getItem('fuel_old_prices') || '{}');
 let yakitLoglari = JSON.parse(localStorage.getItem('fuel_logs') || '[]');
-let aracProfil = JSON.parse(localStorage.getItem('fuel_car_profile') || '{"adi":"","turu":"motorin","depo":50,"km":0}');
+let aracProfil = JSON.parse(localStorage.getItem('fuel_car_profile') || '{"adi":"","turu":[],"depoB":45,"depoL":40,"km":0}');
 
 let globalMarkalar = [];
 let globalStations = [];
@@ -444,9 +447,8 @@ function rotaMaliyetGoster(km) {
     let html = '';
     globalMarkalar.forEach(m => {
         let bF = m.benzin ? (km * 7.0 / 100 * m.benzin).toFixed(1) : null;
-        let mF = m.motorin ? (km * 7.0 / 100 * m.motorin).toFixed(1) : null;
         let lF = m.lpg ? (km * 8.5 / 100 * m.lpg).toFixed(1) : null;
-        html += `<div class="company-card" style="padding:10px; margin-bottom:8px;"><b>${m.firma}</b> (${km} KM Yol Maliyeti): Benzin: ${bF||'-'}₺ | Motorin: ${mF||'-'}₺</div>`;
+        html += `<div class="company-card" style="padding:10px; margin-bottom:8px;"><b>${m.firma}</b> (${km} KM Maliyet): Benzin: ${bF||'-'}₺ | LPG: ${lF||'-'}₺</div>`;
     });
     document.getElementById('rota-maliyet-listesi').innerHTML = html;
 }
@@ -483,7 +485,6 @@ function kartlariOlustur(markalar) {
         const isFav = favorites.includes(m.firma);
         const logo = getLogoUrl(m.firma);
         
-        // Önceki fiyatla kıyaslama (Oklar ve renkler)
         let eski = eskiFiyatlar[m.firma] || {b: m.benzin, m: m.motorin, l: m.lpg};
         let bTrend = m.benzin && eski.b ? (m.benzin > eski.b ? '<span class="trend-indicator trend-up">↑</span>' : (m.benzin < eski.b ? '<span class="trend-indicator trend-down">↓</span>' : '')) : '';
         let mTrend = m.motorin && eski.m ? (m.motorin > eski.m ? '<span class="trend-indicator trend-up">↑</span>' : (m.motorin < eski.m ? '<span class="trend-indicator trend-down">↓</span>' : '')) : '';
@@ -511,27 +512,39 @@ function kartlariOlustur(markalar) {
     document.getElementById('company-list').innerHTML = html;
 }
 
-/* Araç ve Defter Fonksiyonları */
 function aracBilgisiniYukle() {
     document.getElementById('arac-adi').value = aracProfil.adi || '';
-    document.getElementById('arac-yakit-turu').value = aracProfil.turu || 'motorin';
-    document.getElementById('arac-depo').value = aracProfil.depo || 50;
     document.getElementById('arac-km').value = aracProfil.km || 0;
+    document.getElementById('arac-depo-benzin').value = aracProfil.depoB || 45;
+    document.getElementById('arac-depo-lpg').value = aracProfil.depoL || 40;
+
+    if (aracProfil.turu) {
+        document.getElementById('yakit-benzin-sec').checked = aracProfil.turu.includes('benzin');
+        document.getElementById('yakit-motorin-sec').checked = aracProfil.turu.includes('motorin');
+        document.getElementById('yakit-lpg-sec').checked = aracProfil.turu.includes('lpg');
+    }
     istatistikleriGuncelle();
 }
 
 function aracBilgisiniKaydet() {
+    let secilenler = [];
+    if(document.getElementById('yakit-benzin-sec').checked) secilenler.push('benzin');
+    if(document.getElementById('yakit-motorin-sec').checked) secilenler.push('motorin');
+    if(document.getElementById('yakit-lpg-sec').checked) secilenler.push('lpg');
+
     aracProfil = {
         adi: document.getElementById('arac-adi').value,
-        turu: document.getElementById('arac-yakit-turu').value,
-        depo: parseFloat(document.getElementById('arac-depo').value) || 50,
+        turu: secilenler,
+        depoB: parseFloat(document.getElementById('arac-depo-benzin').value) || 45,
+        depoL: parseFloat(document.getElementById('arac-depo-lpg').value) || 40,
         km: parseFloat(document.getElementById('arac-km').value) || 0
     };
     localStorage.setItem('fuel_car_profile', JSON.stringify(aracProfil));
-    alert("Araç bilgileri kaydedildi!");
+    alert("Araç ve çoklu depo bilgileri kaydedildi!");
 }
 
 function yakitAlimiKaydet() {
+    const yakitTuru = document.getElementById('log-yakit-turu').value;
     const istasyon = document.getElementById('yakit-istasyon').value || 'Bilinmeyen İstasyon';
     const litre = parseFloat(document.getElementById('yakit-litre').value);
     const tutar = parseFloat(document.getElementById('yakit-tutar').value);
@@ -540,6 +553,7 @@ function yakitAlimiKaydet() {
     
     const yeniKayit = {
         tarih: new Date().toLocaleDateString('tr-TR'),
+        tur: yakitTuru,
         istasyon: istasyon,
         litre: litre,
         tutar: tutar,
@@ -552,7 +566,7 @@ function yakitAlimiKaydet() {
     document.getElementById('yakit-litre').value = '';
     document.getElementById('yakit-tutar').value = '';
     istatistikleriGuncelle();
-    alert("Yakıt alımı başarıyla kaydedildi!");
+    alert(`${yakitTuru} alımı başarıyla kaydedildi!`);
 }
 
 function istatistikleriGuncelle() {
@@ -563,9 +577,14 @@ function istatistikleriGuncelle() {
     yakitLoglari.forEach((log, idx) => {
         toplamTutar += log.tutar;
         toplamLitre += log.litre;
-        html += `<div style="padding:6px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between;">
-            <div><b>${log.tarih}</b> - ${log.istasyon}<br><small>${log.litre} Lt | ${log.tutar} ₺ (${log.birimFiyat} ₺/Lt)</small></div>
-            <button onclick="kayitSil(${idx})" style="background:none; border:none; color:red; cursor:pointer;">Sil</button>
+        let badgeColor = log.tur === 'Benzin' ? '#b45309' : (log.tur === 'LPG' ? '#0d9488' : '#1e293b');
+        html += `<div style="padding:6px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <span style="background:${badgeColor}; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">${log.tur}</span> 
+                <b>${log.tarih}</b> - ${log.istasyon}<br>
+                <small>${log.litre} Lt | ${log.tutar} ₺ (${log.birimFiyat} ₺/Lt)</small>
+            </div>
+            <button onclick="kayitSil(${idx})" style="background:none; border:none; color:red; cursor:pointer; font-weight:bold;">Sil</button>
         </div>`;
     });
     
