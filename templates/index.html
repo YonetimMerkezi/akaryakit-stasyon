@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Akaryakıt Cepte - Profesyonel Araç & Yakıt Asistanı</title>
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Bootstrap 5 CSS & JS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root { 
@@ -62,20 +65,20 @@ header {
 .suggestion-item:hover { background: #f0fdf4; color: var(--success); }
 
 .route-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-.route-btn { background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(2,132,199,0.25); transition: transform 0.1s; }
+.route-btn { background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(2,132,199,0.25); }
 .station-btn { background: linear-gradient(135deg, #0d9488, #0f766e); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; box-shadow: 0 4px 12px rgba(13,148,136,0.25); }
 .clear-route-btn { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; }
 .toggle-station-btn { background: linear-gradient(135deg, #64748b, #475569); color: white; border: none; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; }
-.route-btn:active, .station-btn:active { transform: scale(0.98); }
 
 .brand-filter-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; scrollbar-width: none; }
 .brand-filter-bar::-webkit-scrollbar { display: none; }
 .filter-chip { background: #e2e8f0; color: #334155; border: none; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
 .filter-chip.active { background: #0f766e; color: white; box-shadow: 0 4px 10px rgba(15,118,110,0.3); }
 
-#map { height: 280px; width: 100%; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 10px; z-index: 1; }
+#map { height: 280px; width: 100%; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 8px; z-index: 1; }
+.map-helper-text { font-size: 11px; color: var(--text-muted); text-align: center; margin-bottom: 12px; line-height: 1.4; font-weight: 500; }
 
-.company-card { background: var(--card-bg); border-radius: 20px; margin-bottom: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.03); border: 1px solid var(--border); padding: 16px; transition: all 0.2s; }
+.company-card { background: var(--card-bg); border-radius: 20px; margin-bottom: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.03); border: 1px solid var(--border); padding: 16px; transition: all 0.2s; cursor: pointer; }
 .company-card.is-favorite { border: 2px solid var(--fav-gold); background: #fffdf9; }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .company-brand { display: flex; align-items: center; gap: 12px; }
@@ -97,9 +100,8 @@ header {
 .stat-title { font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
 .stat-value { font-size: 15px; font-weight: 800; color: var(--primary); }
 
-.btn-main { width: 100%; padding: 14px; background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; border-radius: 16px; font-size: 14px; font-weight: 800; cursor: pointer; margin-top: 12px; box-shadow: 0 6px 20px rgba(2,132,199,0.3); transition: opacity 0.2s; }
+.btn-main { width: 100%; padding: 14px; background: linear-gradient(135deg, #0284c7, #0369a1); color: white; border: none; border-radius: 16px; font-size: 14px; font-weight: 800; cursor: pointer; margin-top: 12px; box-shadow: 0 6px 20px rgba(2,132,199,0.3); }
 .btn-success { background: linear-gradient(135deg, #16a34a, #15803d); box-shadow: 0 6px 20px rgba(22,163,74,0.3); }
-.btn-main:active { opacity: 0.9; }
 </style>
 </head>
 <body>
@@ -139,7 +141,8 @@ header {
                 <button class="filter-chip" onclick="filtreleMarka('Aytemiz')">Aytemiz</button>
             </div>
             <div id="map"></div>
-            <div style="display:flex; gap:10px; margin-top:10px;">
+            <div class="map-helper-text">Haritadaki gerçek istasyon pinlerine tıklayarak detaylı fiyatları inceleyebilir, markası belirsiz istasyonlara marka atayabilirsiniz.</div>
+            <div style="display:flex; gap:10px; margin-top:4px;">
                 <button class="station-btn" style="flex:1;" onclick="enYakinBenzinlikleriBul()">⛽ İstasyonları Bul</button>
                 <button class="toggle-station-btn" id="toggle-station-btn" style="flex:1;" onclick="istasyonlariGosterGizle()">👁️ Gizle/Göster</button>
             </div>
@@ -180,18 +183,9 @@ header {
 
     <div id="arac-tab" class="tab-content">
         <div class="stats-grid">
-            <div class="stat-box">
-                <div class="stat-title">Toplam Harcama</div>
-                <div class="stat-value" id="stat-toplam-tutar">0.00 ₺</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-title">Alınan Yakıt</div>
-                <div class="stat-value" id="stat-toplam-litre">0.0 Lt</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-title">Ort. Tüketim</div>
-                <div class="stat-value" id="stat-ort-tuketim">0.0 Lt/100km</div>
-            </div>
+            <div class="stat-box"><div class="stat-title">Toplam Harcama</div><div class="stat-value" id="stat-toplam-tutar">0.00 ₺</div></div>
+            <div class="stat-box"><div class="stat-title">Alınan Yakıt</div><div class="stat-value" id="stat-toplam-litre">0.0 Lt</div></div>
+            <div class="stat-box"><div class="stat-title">Ort. Tüketim</div><div class="stat-value" id="stat-ort-tuketim">0.0 Lt/100km</div></div>
         </div>
 
         <div class="calc-card">
@@ -200,44 +194,34 @@ header {
                 <div class="route-field"><label>Araç Adı / Model</label><input type="text" id="arac-adi" placeholder="Örn: Megane LPG+Benzin"></div>
                 <div class="route-field"><label>Mevcut Kilometre</label><input type="number" id="arac-km" placeholder="45000"></div>
             </div>
-            
-            <div style="margin-top: 10px;">
-                <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px; text-transform: uppercase;">Aracın Yakıt Türleri (Çoklu Seçim)</label>
-                <div style="display: flex; gap: 16px; background: #f8fafc; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border);">
-                    <label style="font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="yakit-benzin-sec" value="benzin"> Benzin</label>
-                    <label style="font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="yakit-motorin-sec" value="motorin"> Motorin</label>
-                    <label style="font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="yakit-lpg-sec" value="lpg"> LPG</label>
-                </div>
-            </div>
-
-            <div class="route-inputs" style="margin-top: 10px;">
-                <div class="route-field"><label>Benzin Depo (Lt)</label><input type="number" id="arac-depo-benzin" placeholder="45"></div>
-                <div class="route-field"><label>LPG Depo (Lt)</label><input type="number" id="arac-depo-lpg" placeholder="40"></div>
-            </div>
             <button class="btn-main" style="margin-top:6px;" onclick="aracBilgisiniKaydet()">💾 Araç Bilgilerini Kaydet</button>
         </div>
 
         <div class="calc-card">
-            <div class="calc-title">⛽ Yeni Yakıt Alımı Ekle</div>
-            <div class="route-inputs" style="margin-bottom:10px;">
-                <div class="route-field">
-                    <label>Hangi Depoya Alındı?</label>
-                    <select id="log-yakit-turu">
-                        <option value="Benzin">Benzin</option>
-                        <option value="Motorin">Motorin</option>
-                        <option value="LPG">LPG</option>
-                    </select>
-                </div>
-                <div class="route-field">
-                    <label>İstasyon Adı</label>
-                    <input type="text" id="yakit-istasyon" placeholder="Konumdan otomatik veya manuel...">
-                </div>
+            <div class="calc-title">⛽ Yakıt Doldurma</div>
+            <div class="route-inputs" style="margin-bottom: 12px;">
+                <div class="route-field"><label>Tarih</label><input type="date" id="log-tarih"></div>
+                <div class="route-field"><label>Saat</label><input type="time" id="log-saat"></div>
             </div>
-            <div class="route-inputs">
-                <div class="route-field"><label>Alınan Litre</label><input type="number" id="yakit-litre" step="0.01" placeholder="Örn: 30"></div>
-                <div class="route-field"><label>Toplam Tutar (₺)</label><input type="number" id="yakit-tutar" step="0.01" placeholder="Örn: 1200"></div>
+            <div class="route-field" style="margin-bottom: 12px;">
+                <label>Kilometre sayacı</label>
+                <input type="number" id="log-km" placeholder="Örn: 152735">
+                <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;" id="son-km-bilgi">Son kilometre: 0 km</small>
             </div>
-            <button class="btn-main btn-success" onclick="yakitAlimiKaydet()">➕ Yakıt Alımını Kaydet</button>
+            <div class="route-field" style="margin-bottom: 12px;">
+                <label>Yakıt Türü</label>
+                <select id="log-yakit-turu"><option value="LPG">LPG</option><option value="Benzin">Benzin</option><option value="Motorin">Motorin</option></select>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                <div class="route-field"><label>Fiyat / L</label><input type="text" id="log-fiyat" placeholder="30,69" oninput="hesaplaYakit('fiyat')"></div>
+                <div class="route-field"><label>Tutar</label><input type="text" id="log-tutar" placeholder="Maliyet" oninput="hesaplaYakit('tutar')"></div>
+                <div class="route-field"><label>Litre</label><input type="text" id="log-litre" placeholder="Litre" oninput="hesaplaYakit('litre')"></div>
+            </div>
+            <div class="route-field" style="margin-bottom: 12px;">
+                <label>Benzin istasyonu</label>
+                <input type="text" id="yakit-istasyon" placeholder="Örn: Opet Ataşehir">
+            </div>
+            <button class="btn-main btn-success" onclick="yakitAlimiKaydetYeni()">➕ Yakıt Alımını Kaydet</button>
         </div>
 
         <div class="calc-card">
@@ -297,7 +281,8 @@ function getBrandColor(brandName) {
     return '#0f766e';
 }
 
-function toggleFavorite(firma) {
+function toggleFavorite(firma, event) {
+    if(event) event.stopPropagation();
     favorites = favorites.includes(firma) ? favorites.filter(f => f !== firma) : [...favorites, firma];
     localStorage.setItem('fuel_favs', JSON.stringify(favorites));
     kartlariOlustur(globalMarkalar);
@@ -405,56 +390,103 @@ function haritadaGoster(stations) {
     stationMarkers = [];
     stations.forEach(st => {
         const sKey = `${st.lat.toFixed(4)}_${st.lon.toFixed(4)}`;
-        const effBrand = customBrands[sKey] || st.brand;
+        const effBrand = customBrands[sKey] || st.brand || st.name;
         if (aktifFiltre !== 'Tümü' && !effBrand.toLowerCase().includes(aktifFiltre.toLowerCase())) return;
         const bColor = getBrandColor(effBrand);
         const marker = L.marker([st.lat, st.lon], {
             icon: L.divIcon({ className: 'custom-icon', html: `<div style="background:${bColor};color:white;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.2);">⛽ ${effBrand}</div>`, iconSize: [80, 22] })
         });
         if (stationsVisible) marker.addTo(map);
-        marker.bindPopup(`<b>${st.name}</b>`);
+        
+        // Popup İçeriği Oluşturma (İkinci görseldeki tasarıma uygun)
+        marker.bindPopup(istikametPopupIcerigi(st, sKey, effBrand));
         stationMarkers.push(marker);
     });
+}
+
+function istikametPopupIcerigi(st, sKey, effBrand) {
+    let optionsHtml = '';
+    const markaListesi = ['Opet', 'Shell', 'Petrol Ofisi', 'Aytemiz', 'TotalEnergies', 'Alpet', 'Aygaz'];
+    markaListesi.forEach(b => {
+        optionsHtml += `<option value="${b}" ${effBrand.toLowerCase().includes(b.toLowerCase()) ? 'selected' : ''}>${b}</option>`;
+    });
+
+    let fiyatTableHtml = '';
+    if (globalMarkalar && globalMarkalar.length > 0) {
+        globalMarkalar.forEach(m => {
+            let isCurrent = m.firma.toLowerCase().includes(effBrand.toLowerCase());
+            let rowStyle = isCurrent ? 'background:#fef08a; font-weight:bold;' : '';
+            let isFav = favorites.includes(m.firma);
+            fiyatTableHtml += `
+                <tr style="${rowStyle}">
+                    <td style="padding:4px; border-bottom:1px solid #f1f5f9;">${isFav ? '★ ' : ''}${m.firma}</td>
+                    <td style="padding:4px; border-bottom:1px solid #f1f5f9; color:#0284c7;">${m.benzin ? m.benzin.toFixed(2) + '₺' : '-'}</td>
+                    <td style="padding:4px; border-bottom:1px solid #f1f5f9; color:#0284c7;">${m.motorin ? m.motorin.toFixed(2) + '₺' : '-'}</td>
+                    <td style="padding:4px; border-bottom:1px solid #f1f5f9; color:#0284c7;">${m.lpg ? m.lpg.toFixed(2) + '₺' : '-'}</td>
+                </tr>
+            `;
+        });
+    } else {
+        fiyatTableHtml = `<tr><td colspan="4" style="text-align:center; padding:6px;">Fiyatlar yükleniyor...</td></tr>`;
+    }
+
+    return `
+        <div style="font-size:12px; width:260px; max-height:280px; overflow-y:auto; padding:2px;">
+            <div style="background:#b91c1c; color:white; padding:6px 10px; border-radius:6px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span>Akaryakıt İstasyonu</span>
+                <span style="background:rgba(0,0,0,0.25); padding:2px 6px; border-radius:4px; font-size:10px;">${effBrand}</span>
+            </div>
+            <div style="margin-bottom:8px; display:flex; gap:6px; align-items:center;">
+                <label style="font-weight:bold; font-size:11px; white-space:nowrap;">Marka Ata:</label>
+                <select id="brand_select_${sKey}" style="flex:1; padding:4px; font-size:11px; border-radius:4px; border:1px solid #cbd5e1; outline:none;">
+                    ${optionsHtml}
+                </select>
+                <button onclick="markaAtaKaydet('${sKey}')" style="background:#0284c7; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">Kaydet</button>
+            </div>
+            <div style="font-weight:bold; margin-bottom:4px; font-size:11px; color:#334155;">📊 Güncel Fiyat Tablosu</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead>
+                    <tr style="border-bottom:1px solid #cbd5e1; text-align:left; color:#64748b;">
+                        <th style="padding:3px;">Marka</th>
+                        <th style="padding:3px;">Benzin</th>
+                        <th style="padding:3px;">Motorin</th>
+                        <th style="padding:3px;">LPG</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${fiyatTableHtml}
+                </tbody>
+            </table>
+            <div style="margin-top:8px;">
+                <button onclick="istasyonuYakitaSec('${st.name || effBrand}')" style="background:#16a34a; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; width:100%;">⛽ Bu İstasyonu Seç</button>
+            </div>
+        </div>
+    `;
+}
+
+function markaAtaKaydet(sKey) {
+    const sel = document.getElementById(`brand_select_${sKey}`);
+    if(sel) {
+        customBrands[sKey] = sel.value;
+        localStorage.setItem('station_custom_brands', JSON.stringify(customBrands));
+        alert("Marka başarıyla kaydedildi!");
+        if(globalStations.length > 0) haritadaGoster(globalStations);
+    }
+}
+
+function istasyonuYakitaSec(stName) {
+    document.getElementById('yakit-istasyon').value = stName;
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('arac-tab').classList.add('active');
+    const buttons = document.querySelectorAll('.tab-btn');
+    if(buttons[2]) buttons[2].classList.add('active');
 }
 
 function filtreleMarka(marka) {
     aktifFiltre = marka;
     document.querySelectorAll('.filter-chip').forEach(b => b.innerText.includes(marka) || (marka==='Tümü'&&b.innerText==='Tümü') ? b.classList.add('active') : b.classList.remove('active'));
     if(globalStations.length > 0) haritadaGoster(globalStations);
-}
-
-async function rotaBulYazarak() {
-    const bText = document.getElementById('baslangic-input').value;
-    const vText = document.getElementById('varis-input').value;
-    if(!bText || !vText) return;
-    let sCoords = (isUsingGps && userGpsLat) ? [userGpsLat, userGpsLon] : await koordinatBul(bText);
-    let eCoords = await koordinatBul(vText);
-    if(sCoords && eCoords) {
-        if(!map) initMap();
-        const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${sCoords[1]},${sCoords[0]};${eCoords[1]},${eCoords[0]}?overview=full&geometries=geojson`);
-        const data = await res.json();
-        if(markerStart) map.removeLayer(markerStart);
-        if(markerEnd) map.removeLayer(markerEnd);
-        if(polyline) map.removeLayer(polyline);
-        markerStart = L.marker(sCoords).addTo(map);
-        markerEnd = L.marker(eCoords).addTo(map);
-        if (data.code === 'Ok') {
-            const km = (data.routes[0].distance / 1000).toFixed(1);
-            polyline = L.polyline(data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]), {color: '#0284c7', weight: 5}).addTo(map);
-            map.fitBounds(polyline.getBounds());
-            rotaMaliyetGoster(km);
-        }
-    }
-}
-
-function rotaMaliyetGoster(km) {
-    let html = '';
-    globalMarkalar.forEach(m => {
-        let bF = m.benzin ? (km * 7.0 / 100 * m.benzin).toFixed(1) : null;
-        let lF = m.lpg ? (km * 8.5 / 100 * m.lpg).toFixed(1) : null;
-        html += `<div class="company-card" style="padding:12px; margin-bottom:8px;"><b>${m.firma}</b> (${km} KM Maliyet): Benzin: ${bF||'-'}₺ | LPG: ${lF||'-'}₺</div>`;
-    });
-    document.getElementById('rota-maliyet-listesi').innerHTML = html;
 }
 
 async function ilDegisti() {
@@ -497,13 +529,13 @@ function kartlariOlustur(markalar) {
         eskiFiyatlar[m.firma] = {b: m.benzin, m: m.motorin, l: m.lpg};
         
         html += `
-        <div class="company-card ${isFav ? 'is-favorite' : ''}">
+        <div class="company-card ${isFav ? 'is-favorite' : ''}" onclick="istasyonuYakitaSec('${m.firma}')">
             <div class="card-header">
                 <div class="company-brand">
                     <img src="${logo}" class="brand-logo" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.firma)}'">
                     <span class="company-title">${m.firma}</span>
                 </div>
-                <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${m.firma}')">${isFav ? '★' : '☆'}</button>
+                <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${m.firma}', event)">${isFav ? '★' : '☆'}</button>
             </div>
             <div class="prices-grid">
                 <div class="price-box"><div class="fuel-type">Benzin</div><div class="fuel-price">${m.benzin ? m.benzin.toFixed(2) + '₺' : '-'}${bTrend}</div></div>
@@ -519,79 +551,77 @@ function kartlariOlustur(markalar) {
 function aracBilgisiniYukle() {
     document.getElementById('arac-adi').value = aracProfil.adi || '';
     document.getElementById('arac-km').value = aracProfil.km || 0;
-    document.getElementById('arac-depo-benzin').value = aracProfil.depoB || 45;
-    document.getElementById('arac-depo-lpg').value = aracProfil.depoL || 40;
-
-    if (aracProfil.turu) {
-        document.getElementById('yakit-benzin-sec').checked = aracProfil.turu.includes('benzin');
-        document.getElementById('yakit-motorin-sec').checked = aracProfil.turu.includes('motorin');
-        document.getElementById('yakit-lpg-sec').checked = aracProfil.turu.includes('lpg');
-    }
+    document.getElementById('son-km-bilgi').innerText = `Son kilometre: ${aracProfil.km || 0} km`;
     istatistikleriGuncelle();
 }
 
 function aracBilgisiniKaydet() {
-    let secilenler = [];
-    if(document.getElementById('yakit-benzin-sec').checked) secilenler.push('benzin');
-    if(document.getElementById('yakit-motorin-sec').checked) secilenler.push('motorin');
-    if(document.getElementById('yakit-lpg-sec').checked) secilenler.push('lpg');
-
     aracProfil = {
         adi: document.getElementById('arac-adi').value,
-        turu: secilenler,
-        depoB: parseFloat(document.getElementById('arac-depo-benzin').value) || 45,
-        depoL: parseFloat(document.getElementById('arac-depo-lpg').value) || 40,
         km: parseFloat(document.getElementById('arac-km').value) || 0
     };
     localStorage.setItem('fuel_car_profile', JSON.stringify(aracProfil));
-    alert("Araç ve çoklu depo bilgileri kaydedildi!");
+    document.getElementById('son-km-bilgi').innerText = `Son kilometre: ${aracProfil.km} km`;
+    alert("Araç bilgileri kaydedildi!");
 }
 
-function yakitAlimiKaydet() {
+function hesaplaYakit(degisenAlan) {
+    let fiyat = parseFloat(document.getElementById('log-fiyat').value.replace(',', '.'));
+    let maliyet = parseFloat(document.getElementById('log-tutar').value.replace(',', '.'));
+    let litre = parseFloat(document.getElementById('log-litre').value.replace(',', '.'));
+
+    if (degisenAlan !== 'tutar' && !isNaN(fiyat) && !isNaN(litre)) {
+        document.getElementById('log-tutar').value = (fiyat * litre).toFixed(2).replace('.', ',');
+    } else if (degisenAlan !== 'litre' && !isNaN(maliyet) && !isNaN(fiyat) && fiyat > 0) {
+        document.getElementById('log-litre').value = (maliyet / fiyat).toFixed(3).replace('.', ',');
+    } else if (degisenAlan !== 'fiyat' && !isNaN(maliyet) && !isNaN(litre) && litre > 0) {
+        document.getElementById('log-fiyat').value = (maliyet / litre).toFixed(2).replace('.', ',');
+    }
+}
+
+function yakitAlimiKaydetYeni() {
+    const tarih = document.getElementById('log-tarih').value;
+    const saat = document.getElementById('log-saat').value;
+    const km = document.getElementById('log-km').value;
     const yakitTuru = document.getElementById('log-yakit-turu').value;
     const istasyon = document.getElementById('yakit-istasyon').value || 'Bilinmeyen İstasyon';
-    const litre = parseFloat(document.getElementById('yakit-litre').value);
-    const tutar = parseFloat(document.getElementById('yakit-tutar').value);
+    const litre = parseFloat(document.getElementById('log-litre').value.replace(',', '.'));
+    const tutar = parseFloat(document.getElementById('log-tutar').value.replace(',', '.'));
     
-    if(!litre || !tutar) { alert("Lütfen litre ve tutar giriniz."); return; }
+    if(!litre || !tutar) { alert("Lütfen geçerli litre ve tutar giriniz."); return; }
     
-    const yeniKayit = {
-        tarih: new Date().toLocaleDateString('tr-TR'),
-        tur: yakitTuru,
-        istasyon: istasyon,
-        litre: litre,
-        tutar: tutar,
+    yakitLoglari.unshift({
+        tarih: tarih ? `${tarih} ${saat}` : new Date().toLocaleString('tr-TR'),
+        tur: yakitTuru, istasyon, litre, tutar,
         birimFiyat: (tutar / litre).toFixed(2)
-    };
-    
-    yakitLoglari.unshift(yeniKayit);
+    });
     localStorage.setItem('fuel_logs', JSON.stringify(yakitLoglari));
     
-    document.getElementById('yakit-litre').value = '';
-    document.getElementById('yakit-tutar').value = '';
+    if(km) {
+        aracProfil.km = parseFloat(km);
+        localStorage.setItem('fuel_car_profile', JSON.stringify(aracProfil));
+        document.getElementById('son-km-bilgi').innerText = `Son kilometre: ${aracProfil.km} km`;
+    }
+
+    document.getElementById('log-litre').value = '';
+    document.getElementById('log-tutar').value = '';
+    document.getElementById('log-fiyat').value = '';
+    document.getElementById('log-km').value = '';
+    
     istatistikleriGuncelle();
-    alert(`${yakitTuru} alımı başarıyla kaydedildi!`);
+    alert("Yakıt alımı başarıyla kaydedildi!");
 }
 
 function istatistikleriGuncelle() {
-    let toplamTutar = 0;
-    let toplamLitre = 0;
-    let html = '';
-    
+    let toplamTutar = 0, toplamLitre = 0, html = '';
     yakitLoglari.forEach((log, idx) => {
         toplamTutar += log.tutar;
         toplamLitre += log.litre;
-        let badgeColor = log.tur === 'Benzin' ? '#b45309' : (log.tur === 'LPG' ? '#0d9488' : '#1e293b');
         html += `<div style="padding:8px 4px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <span style="background:${badgeColor}; color:white; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:bold;">${log.tur}</span> 
-                <b>${log.tarih}</b> - ${log.istasyon}<br>
-                <small style="color:var(--text-muted);">${log.litre} Lt | ${log.tutar} ₺ (${log.birimFiyat} ₺/Lt)</small>
-            </div>
-            <button onclick="kayitSil(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:bold; font-size:12px;">Sil</button>
+            <div><b>${log.tarih}</b> - ${log.istasyon} (${log.tur})<br><small style="color:var(--text-muted);">${log.litre} Lt | ${log.tutar} ₺</small></div>
+            <button onclick="kayitSil(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:bold;">Sil</button>
         </div>`;
     });
-    
     document.getElementById('stat-toplam-tutar').innerText = toplamTutar.toFixed(2) + ' ₺';
     document.getElementById('stat-toplam-litre').innerText = toplamLitre.toFixed(1) + ' Lt';
     document.getElementById('stat-ort-tuketim').innerText = toplamLitre > 0 ? (toplamTutar / toplamLitre).toFixed(2) + ' ₺/Lt' : '0.0';
@@ -607,6 +637,9 @@ function kayitSil(idx) {
 window.onload = async () => { 
     initMap(); 
     aracBilgisiniYukle();
+    const now = new Date();
+    document.getElementById('log-tarih').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    document.getElementById('log-saat').value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     await ilDegisti(); 
 };
 </script>
