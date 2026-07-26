@@ -1,0 +1,34 @@
+name: Android APK Derleme ve Paketleme
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Depo Kodlarını İndir
+        uses: actions/checkout@v4
+
+      - name: JDK (Java) Ortamını Kur
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Android SDK Kurulumu
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle İzinlerini Düzenle ve Derle
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Üretilen APK Dosyasını Kaydet
+        uses: actions/upload-artifact@v4
+        with:
+          name: uygulama-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
