@@ -134,6 +134,7 @@ header {
             <div style="display:flex; align-items:center; gap:6px;">
                 <span style="font-size: 11px; font-weight: 700; color: var(--text-muted);" id="data-source">Kaynak: Yükleniyor...</span>
                 <span id="live-badge" style="display:none; font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px;"></span>
+                <button id="yenile-btn" onclick="fiyatlariZorlaYenile(event)" title="Önbelleği atlayıp güncel fiyatları yeniden çek" style="margin-left:auto; background:transparent; border:1px solid var(--border); color:var(--text-muted); padding:3px 8px; border-radius:8px; font-size:11px; cursor:pointer;">🔄 Yenile</button>
             </div>
         </div>
         
@@ -848,6 +849,21 @@ async function ilDegisti() {
     isUsingGps = false;
     fiyatlariGetir();
     enYakinBenzinlikleriBul();
+}
+
+async function fiyatlariZorlaYenile(evt) {
+    const il = document.getElementById('il-select').value;
+    const btn = evt && evt.target;
+    if (btn) { btn.disabled = true; btn.innerText = '⏳...'; }
+    try {
+        await fetch('/api/cache/temizle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ il }),
+        });
+    } catch (e) { console.warn('Cache temizlenemedi', e); }
+    await fiyatlariGetir();
+    if (btn) { btn.disabled = false; btn.innerText = '🔄 Yenile'; }
 }
 
 async function fiyatlariGetir() {
