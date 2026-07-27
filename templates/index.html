@@ -255,11 +255,20 @@ header {
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// NOT: BP Petrolleri A.Ş., Petrol Ofisi Grubu ile birleşti (marka dönüşümü
+// Kasım 2026'da tamamlanacak) — bu yüzden 'bp' artık ayrı bir marka değil,
+// Petrol Ofisi'nin domaini üzerinden ikon alıyor (bkz. normalizeMarka()).
 const DOMAIN_MAP = {
     'petrol ofisi': 'petrolofisi.com.tr', 'shell': 'shell.com.tr', 'opet': 'opet.com.tr',
-    'aytemiz': 'aytemiz.com.tr', 'totalenergies': 'totalenergiesistasyonlari.com.tr', 'aygaz': 'aygaz.com.tr',
-    'alpet': 'alpet.com.tr', 'kadoil': 'kadoil.com', 'lukoil': 'lukoil.com', 'bp': 'bp.com',
-    'go': 'goyakit.com.tr', 'moil': 'totalenerji.com.tr',
+    'aytemiz': 'aytemiz.com.tr', 'totalenergies': 'totalenergiesistasyonlari.com.tr', 'total': 'totalenergiesistasyonlari.com.tr',
+    'aygaz': 'aygaz.com.tr', 'alpet': 'alpet.com.tr', 'kadoil': 'kadoil.com.tr', 'lukoil': 'lukoil.com.tr',
+    'bp': 'petrolofisi.com.tr',
+    'go': 'goyakit.com.tr', 'moil': 'totalenerji.com.tr', 'milangaz': 'milangaz.com.tr',
+    'naspet': 'naspet.com.tr', 'sunpet': 'sunpet.com.tr', 'siyam': 'siyampetrolculuk.com.tr',
+    'azure petrol': 'azurepetrol.com.tr', 'azure': 'azurepetrol.com.tr', 'memoil': 'memoil.com.tr',
+    'mfd': 'mfdakaryakit.com.tr', 'qplus': 'qplus.com.tr', 'starpet': 'starpet.com.tr',
+    'türkiye petrolleri': 'tp.gov.tr', 'tp petrol': 'tp.gov.tr', 'mepet': 'mepet.com.tr',
+    'mogaz': 'mogaz.com.tr', 'öz petrol': 'ozpetrol.com.tr', 'akfel': 'akfel.com.tr',
 };
 // Domanı bilinmeyen (küçük/bölgesel bayi) markalar için sabit, ayırt edici renk paleti
 const FALLBACK_PALETTE = ['#0284c7','#7c3aed','#db2777','#059669','#d97706','#dc2626','#0891b2','#4338ca','#65a30d','#c026d3'];
@@ -278,6 +287,7 @@ let aracProfil = JSON.parse(localStorage.getItem('fuel_car_profile') || '{"adi":
 if (!Array.isArray(aracProfil.depolar)) aracProfil.depolar = [];
 let depolar = JSON.parse(JSON.stringify(aracProfil.depolar));
 let yakitIstasyonMarkasiSecili = null;
+let sonKonumFiyatListesi = null; // GPS ile bulunan istasyonun ilinin fiyat listesi (yakıt türü değişince de kullanılsın diye)
 
 function depoSatiriHtml(depo, idx) {
     return `<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
@@ -389,7 +399,7 @@ async function overpassIstasyonlariBul(lat, lon) {
                     const c = el.type === 'node' ? { lat: el.lat, lon: el.lon } : el.center;
                     if (!c) return null;
                     const t = el.tags || {};
-                    const marka = t.brand || t.operator || t.name || 'Bilinmeyen';
+                    const marka = normalizeMarka(t.brand || t.operator || t.name || 'Bilinmeyen');
                     return { name: t.name || marka, brand: marka, lat: c.lat, lon: c.lon };
                 }).filter(Boolean);
                 if (istasyonlar.length > 0) return istasyonlar;
@@ -398,6 +408,19 @@ async function overpassIstasyonlariBul(lat, lon) {
         }
     }
     return [];
+}
+
+// BP Petrolleri A.Ş., Petrol Ofisi Grubu'na katıldı (istasyon marka dönüşümü
+// Kasım 2026'da tamamlanacak). Haritadaki/OSM'deki eski "BP" etiketli
+// istasyonları da artık Petrol Ofisi olarak gösteriyoruz ki fiyat eşleşmesi
+// ve ikon doğru çalışsın.
+function normalizeMarka(isim) {
+    if (!isim) return isim;
+    const temiz = isim.trim().toLowerCase();
+    if (temiz === 'bp' || temiz === 'bp türkiye' || temiz === 'bp petrolleri' || temiz.startsWith('bp ')) {
+        return 'Petrol Ofisi';
+    }
+    return isim;
 }
 
 function yerelIkonSVG(firma) {
@@ -939,20 +962,40 @@ async function istasyonuKonumdanBul(evt) {
             });
 
             let adresMetni = '';
+            let ilSlug = null;
             if(adresVerisi) {
                 const a = adresVerisi.address || {};
                 adresMetni = [a.road, a.suburb || a.neighbourhood, a.town || a.district].filter(Boolean).join(', ');
+                const ilAdayi = a.province || a.state || a.city || a.county || '';
+                if (ilAdayi) ilSlug = turkceSlug(ilAdayi);
+            }
+
+            // ÖNEMLİ: GPS'in bulunduğu il, ekranda o an seçili olan ilden
+            // farklı olabilir (örn. seyahatteyken yakıt alırken). Bu yüzden
+            // ekrandaki (muhtemelen alakasız) fiyat listesine bakmak yerine,
+            // konumun gerçekten bulunduğu ilin güncel fiyatını ayrıca çekiyoruz.
+            let konumFiyatListesi = globalMarkalar;
+            if (ilSlug) {
+                try {
+                    const res = await fetch(`/api/fiyatlar?il=${ilSlug}`);
+                    const data = await res.json();
+                    if (data.status === 'success' && data.markalar && data.markalar.length > 0) {
+                        konumFiyatListesi = data.markalar;
+                    }
+                } catch (e) { console.warn('Konumun ili için fiyat çekilemedi, ekrandaki liste kullanılacak', e); }
             }
 
             if(enYakin && enYakinMesafe < 1500) {
-                document.getElementById('yakit-istasyon').value = `${enYakin.brand}${adresMetni ? ' - ' + adresMetni : ''}`;
-                yakitIstasyonMarkasiSecili = enYakin.brand;
+                const marka = normalizeMarka(enYakin.brand);
+                document.getElementById('yakit-istasyon').value = `${marka}${adresMetni ? ' - ' + adresMetni : ''}`;
+                yakitIstasyonMarkasiSecili = marka;
             } else {
                 document.getElementById('yakit-istasyon').value = adresMetni || 'Konum bulundu, istasyon adı bulunamadı';
                 yakitIstasyonMarkasiSecili = null;
                 if(!enYakin) alert('Yakında haritalanmış bir istasyon bulunamadı, fiyat elle girilmeli.');
             }
-            fiyatOtomatikDoldur();
+            sonKonumFiyatListesi = konumFiyatListesi;
+            fiyatOtomatikDoldur(konumFiyatListesi);
         } catch(e) {
             alert('Konum/istasyon bilgisi alınamadı.');
         } finally {
@@ -964,11 +1007,12 @@ async function istasyonuKonumdanBul(evt) {
     });
 }
 
-function fiyatOtomatikDoldur() {
-    if(!globalMarkalar || globalMarkalar.length === 0 || !yakitIstasyonMarkasiSecili) return;
+function fiyatOtomatikDoldur(kaynakMarkalar) {
+    const markalar = kaynakMarkalar || sonKonumFiyatListesi || globalMarkalar;
+    if(!markalar || markalar.length === 0 || !yakitIstasyonMarkasiSecili) return;
     const tur = document.getElementById('log-yakit-turu').value;
     const marka = yakitIstasyonMarkasiSecili.toLowerCase();
-    const kayit = globalMarkalar.find(m => {
+    const kayit = markalar.find(m => {
         const f = m.firma.toLowerCase();
         return f.includes(marka) || marka.includes(f);
     });
