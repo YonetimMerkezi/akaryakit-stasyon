@@ -1,5 +1,6 @@
-// Cloudflare Worker - Elazığ Merkez Akaryakıt Fiyatları
+// Cloudflare Worker - Akaryakıt Fiyatları
 // Kaynak: doviz.com
+// Kullanım: ?il=elazig&ilce=merkez
 
 export default {
   async fetch(request) {
@@ -7,34 +8,51 @@ export default {
       return new Response(null, { headers: corsHeaders() });
     }
 
+    const url = new URL(request.url);
+    const il    = url.searchParams.get("il")    || "elazig";
+    const ilce  = url.searchParams.get("ilce")  || "merkez";
+
+    // Türkçe karakter → URL uyumlu slug
+    const slug = (s) => s
+      .toLowerCase()
+      .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
+      .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c")
+      .replace(/\s+/g, "-");
+
+    const ilSlug   = slug(il);
+    const ilceSlug = slug(ilce);
+    const hedefUrl = `https://www.doviz.com/akaryakit-fiyatlari/${ilSlug}/${ilceSlug}`;
+
     try {
-      const res = await fetch(
-        "https://www.doviz.com/akaryakit-fiyatlari/elazig/merkez",
-        {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "tr-TR,tr;q=0.9",
-          },
-        }
-      );
+      const res = await fetch(hedefUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "tr-TR,tr;q=0.9",
+        },
+      });
 
       if (!res.ok) {
-        return jsonResponse({ error: true, message: `HTTP ${res.status}` }, 500);
+        return jsonResponse({ error: true, message: `HTTP ${res.status}`, url: hedefUrl }, 500);
       }
 
       const html = await res.text();
       const istasyonlar = parseAkaryakit(html);
 
       if (istasyonlar.length === 0) {
-        return jsonResponse({ error: true, message: "Veri parse edilemedi" }, 500);
+        return jsonResponse({ error: true, message: "Veri parse edilemedi", url: hedefUrl }, 500);
       }
+
+      // Sayfa başlığından il/ilçe adını al
+      const baslikMatch = html.match(/<h1[^>]*class="page-title"[^>]*>([^<]+)<\/h1>/);
+      const baslik = baslikMatch ? baslikMatch[1].trim() : `${il} / ${ilce}`;
 
       return jsonResponse({
         error: false,
         guncelleme: new Date().toISOString(),
-        il: "Elazığ",
-        ilce: "Merkez",
+        baslik,
+        il: ilSlug,
+        ilce: ilceSlug,
         istasyonlar,
       });
 
@@ -44,6 +62,7 @@ export default {
   },
 };
 
+// ── Parser ────────────────────────────────────────────────────
 function parseAkaryakit(html) {
   const istasyonlar = [];
 
@@ -83,7 +102,7 @@ function parseAkaryakit(html) {
   return istasyonlar;
 }
 
-
+// ── Yardımcı ─────────────────────────────────────────────────
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
