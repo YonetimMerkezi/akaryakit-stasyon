@@ -146,6 +146,7 @@ header {
                 <button class="filter-chip" onclick="filtreleMarka('Petrol Ofisi')">Petrol Ofisi</button>
                 <button class="filter-chip" onclick="filtreleMarka('Aytemiz')">Aytemiz</button>
             </div>
+            <div id="istasyon-durum" style="font-size:11px; font-weight:700; color:var(--text-muted); text-align:center; margin-bottom:6px;"></div>
             <div id="map"></div>
             <div class="map-helper-text">Haritadaki gerçek istasyon pinlerine tıklayarak detaylı fiyatları inceleyebilir, markası belirsiz istasyonlara marka atayabilirsiniz.</div>
             <div style="display:flex; gap:10px; margin-top:4px;">
@@ -175,7 +176,7 @@ header {
             </div>
             
             <div class="route-actions" style="margin-top: 12px;">
-                <button class="route-btn" onclick="rotaBulYazarak()" style="grid-column: span 1;">🔍 Rota Hesapla</button>
+                <button class="route-btn" onclick="rotaBulYazarak(event)" style="grid-column: span 1;">🔍 Rota Hesapla</button>
                 <button class="clear-route-btn" onclick="rotayiTemizle()" style="grid-column: span 1;">🗑️ Temizle</button>
             </div>
 
@@ -271,6 +272,86 @@ let userGpsLat = null, userGpsLon = null, isUsingGps = false, stationsVisible = 
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' });
 const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' });
 
+// ─── Konum servisleri: DOĞRUDAN TARAYICIDAN (Nominatim/Overpass), sunucu üzerinden değil ───
+// Bu sayede paylaşımlı sunucu IP'sinin (Render vb.) bu ücretsiz servisler tarafından
+// hız sınırlanması/engellenmesi durumunda bile konum özellikleri çalışmaya devam eder.
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
+const OVERPASS_MIRRORS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.openstreetmap.ru/api/interpreter',
+];
+
+async function nominatimAra(sorgu, limit = 5) {
+    try {
+        const url = `${NOMINATIM_BASE}/search?q=${encodeURIComponent(sorgu)}&format=jsonv2&limit=${limit}&countrycodes=tr&addressdetails=1`;
+        const res = await fetch(url, { headers: { 'Accept-Language': 'tr' } });
+        if (!res.ok) return [];
+        return await res.json();
+    } catch (e) { console.warn('Nominatim arama hatası', e); return []; }
+}
+
+async function nominatimTersKod(lat, lon) {
+    try {
+        const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lon}&format=jsonv2&addressdetails=1&zoom=16`;
+        const res = await fetch(url, { headers: { 'Accept-Language': 'tr' } });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) { console.warn('Nominatim ters kod hatası', e); return null; }
+}
+
+function turkceSlug(s) {
+    if (!s) return '';
+    const harita = { 'ç':'c','ğ':'g','ı':'i','ö':'o','ş':'s','ü':'u','Ç':'c','Ğ':'g','İ':'i','I':'i','Ö':'o','Ş':'s','Ü':'u' };
+    return s.trim().toLowerCase().split('').map(ch => harita[ch] || ch).join('').replace(/\s+/g, '-');
+}
+
+async function overpassIstasyonlariBul(lat, lon) {
+    const yaricapListesi = [6000, 15000, 30000]; // önce yakın, bulamazsa genişlet
+    for (const r of yaricapListesi) {
+        const query = `[out:json][timeout:20];(node["amenity"="fuel"](around:${r},${lat},${lon});way["amenity"="fuel"](around:${r},${lat},${lon}););out center 40;`;
+        for (const mirror of OVERPASS_MIRRORS) {
+            try {
+                const res = await fetch(mirror, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'data=' + encodeURIComponent(query),
+                });
+                if (!res.ok) continue;
+                const data = await res.json();
+                const istasyonlar = (data.elements || []).map(el => {
+                    const c = el.type === 'node' ? { lat: el.lat, lon: el.lon } : el.center;
+                    if (!c) return null;
+                    const t = el.tags || {};
+                    const marka = t.brand || t.operator || t.name || 'Bilinmeyen';
+                    return { name: t.name || marka, brand: marka, lat: c.lat, lon: c.lon };
+                }).filter(Boolean);
+                if (istasyonlar.length > 0) return istasyonlar;
+                break; // bu mirror cevap verdi ama boş -> yarıçapı genişlet, diğer mirror'ları deneme
+            } catch (e) { console.warn('Overpass mirror hatası', mirror, e); }
+        }
+    }
+    return [];
+}
+
+function yerelIkonSVG(firma) {
+    const harfler = (firma || '?').trim().substring(0, 2).toUpperCase();
+    const renk = renkHashi(firma || '?');
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' rx='14' fill='${renk}'/><text x='50%' y='54%' font-family='Arial, sans-serif' font-size='24' font-weight='bold' fill='#fff' text-anchor='middle' dominant-baseline='middle'>${harfler}</text></svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+function logoHataYonet(img, firma) {
+    if (img.src.indexOf('ui-avatars.com') !== -1) {
+        img.onerror = null;
+        img.src = yerelIkonSVG(firma);
+        return;
+    }
+    const renk = renkHashi(firma).replace('#', '');
+    img.onerror = function() { logoHataYonet(img, firma); };
+    img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(firma)}&background=${renk}&color=fff&bold=true&length=2`;
+}
+
 function sekmeDegis(tabId, btn) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -315,6 +396,97 @@ function rotayiTemizle() {
     if(polyline) { map.removeLayer(polyline); polyline = null; }
     document.getElementById('baslangic-input').value = '';
     document.getElementById('varis-input').value = '';
+    delete secilenKoordinatlar['baslangic-input'];
+    delete secilenKoordinatlar['varis-input'];
+    document.getElementById('rota-maliyet-listesi').innerHTML = '';
+}
+
+async function rotaBulYazarak(evt) {
+    const baslangicMetin = document.getElementById('baslangic-input').value.trim();
+    const varisMetin = document.getElementById('varis-input').value.trim();
+    if(!baslangicMetin || !varisMetin) { alert('Lütfen başlangıç ve varış noktalarını girin.'); return; }
+
+    const btn = evt && evt.target;
+    if(btn) { btn.disabled = true; btn.innerText = '⏳ Hesaplanıyor...'; }
+
+    try {
+        const baslamaKoord = secilenKoordinatlar['baslangic-input'] ||
+            (isUsingGps && userGpsLat ? [userGpsLat, userGpsLon] : await koordinatBul(baslangicMetin));
+        const varisKoord = secilenKoordinatlar['varis-input'] || await koordinatBul(varisMetin);
+
+        if(!baslamaKoord || !varisKoord) {
+            alert('Adres(ler) bulunamadı. Lütfen yazarken çıkan öneri listesinden bir adres seçin.');
+            return;
+        }
+
+        if(!map) initMap();
+        if(markerStart) map.removeLayer(markerStart);
+        if(markerEnd) map.removeLayer(markerEnd);
+        if(polyline) map.removeLayer(polyline);
+
+        markerStart = L.marker(baslamaKoord).addTo(map).bindPopup('🟢 Başlangıç: ' + baslangicMetin);
+        markerEnd = L.marker(varisKoord).addTo(map).bindPopup('🔴 Varış: ' + varisMetin);
+
+        try {
+            const url = `https://router.project-osrm.org/route/v1/driving/${baslamaKoord[1]},${baslamaKoord[0]};${varisKoord[1]},${varisKoord[0]}?overview=full&geometries=geojson`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if(data.code === 'Ok' && data.routes && data.routes[0]) {
+                const rota = data.routes[0];
+                const koordlar = rota.geometry.coordinates.map(c => [c[1], c[0]]);
+                polyline = L.polyline(koordlar, { color: '#0284c7', weight: 5, opacity: 0.85 }).addTo(map);
+                map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+                const mesafeKm = (rota.distance / 1000).toFixed(1);
+                const sureDk = Math.round(rota.duration / 60);
+                document.getElementById('mesafe-km').value = mesafeKm;
+                maliyetHesapla();
+                document.getElementById('rota-maliyet-listesi').insertAdjacentHTML('afterbegin',
+                    `<div class="calc-card" style="text-align:center; font-size:13px; font-weight:700; color:var(--text-main);">🚗 ${mesafeKm} km · ⏱️ ${sureDk < 60 ? sureDk + ' dk' : Math.floor(sureDk/60) + ' sa ' + (sureDk%60) + ' dk'}</div>`);
+            } else {
+                throw new Error('Rota bulunamadı');
+            }
+        } catch(rotaHatasi) {
+            map.fitBounds(L.latLngBounds([baslamaKoord, varisKoord]), { padding: [40, 40] });
+            const havaMesafesi = L.latLng(baslamaKoord).distanceTo(L.latLng(varisKoord)) / 1000;
+            document.getElementById('mesafe-km').value = havaMesafesi.toFixed(1);
+            maliyetHesapla();
+            document.getElementById('rota-maliyet-listesi').insertAdjacentHTML('afterbegin',
+                `<div class="calc-card" style="text-align:center; font-size:12px; color:var(--text-muted);">⚠️ Rota servisi şu anda erişilemiyor, kuş uçuşu mesafe (${havaMesafesi.toFixed(1)} km) kullanıldı. Mesafeyi elle düzeltebilirsiniz.</div>`);
+        }
+
+        sekmeDegis('fiyatlar-tab', document.querySelector('.tab-btn'));
+    } finally {
+        if(btn) { btn.disabled = false; btn.innerText = '🔍 Rota Hesapla'; }
+    }
+}
+
+function maliyetHesapla() {
+    const liste = document.getElementById('rota-maliyet-listesi');
+    if(!liste) return;
+    const mesafe = parseFloat(document.getElementById('mesafe-km').value) || 0;
+    const tuketim = parseFloat(document.getElementById('tuketim-lt').value) || 0;
+    const gerekliLitre = (mesafe / 100) * tuketim;
+
+    if(gerekliLitre <= 0 || !globalMarkalar || globalMarkalar.length === 0) {
+        liste.innerHTML = '<div class="calc-card" style="text-align:center; color:var(--text-muted); font-weight:600; font-size:13px;">Maliyet için mesafe/tüketim girin ve fiyatların yüklü olduğundan emin olun.</div>';
+        return;
+    }
+
+    const siraliMarkalar = [...globalMarkalar].sort((a, b) => (a.motorin || a.benzin || 999) - (b.motorin || b.benzin || 999));
+    let satirlar = '';
+    siraliMarkalar.forEach(m => {
+        const benzinMaliyet = m.benzin ? (m.benzin * gerekliLitre).toFixed(2) : null;
+        const motorinMaliyet = m.motorin ? (m.motorin * gerekliLitre).toFixed(2) : null;
+        satirlar += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 4px; border-bottom:1px solid #f1f5f9;">
+            <span style="font-weight:700; font-size:13px;">${favorites.includes(m.firma) ? '★ ' : ''}${m.firma}</span>
+            <span style="font-size:12px; color:var(--text-muted); text-align:right;">${benzinMaliyet ? 'Benzin ' + benzinMaliyet + '₺' : ''}${benzinMaliyet && motorinMaliyet ? ' · ' : ''}${motorinMaliyet ? 'Motorin ' + motorinMaliyet + '₺' : ''}</span>
+        </div>`;
+    });
+
+    liste.innerHTML = `<div class="calc-card">
+        <div class="calc-title">⛽ Tahmini Yakıt Maliyeti (${mesafe} km · ${gerekliLitre.toFixed(1)} Lt)</div>
+        ${satirlar}
+    </div>`;
 }
 
 function kullaniciYazdi(inputId, boxId) {
@@ -333,20 +505,17 @@ function autocompleteAra(inputId, boxId) {
     if(q.length < 2) { box.style.display = 'none'; return; }
     clearTimeout(timeoutId);
     timeoutId = setTimeout(async () => {
-        try {
-            const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(q)}`);
-            const data = await res.json();
-            if(data && data.length > 0) {
-                sonOneriler = data;
-                let html = '';
-                data.forEach((item, idx) => {
-                    html += `<div class="suggestion-item" onclick="secimYap('${inputId}', '${boxId}', ${idx})">${item.display_name}</div>`;
-                });
-                box.innerHTML = html;
-                box.style.display = 'block';
-            } else { box.style.display = 'none'; }
-        } catch(e) { box.style.display = 'none'; }
-    }, 300);
+        const data = await nominatimAra(q, 6);
+        if(data && data.length > 0) {
+            sonOneriler = data.map(s => ({ display_name: s.display_name, lat: parseFloat(s.lat), lon: parseFloat(s.lon) }));
+            let html = '';
+            sonOneriler.forEach((item, idx) => {
+                html += `<div class="suggestion-item" onclick="secimYap('${inputId}', '${boxId}', ${idx})">${item.display_name}</div>`;
+            });
+            box.innerHTML = html;
+            box.style.display = 'block';
+        } else { box.style.display = 'none'; }
+    }, 400);
 }
 
 function secimYap(inputId, boxId, idx) {
@@ -370,36 +539,41 @@ function konumumuBul() {
         userGpsLat = position.coords.latitude;
         userGpsLon = position.coords.longitude;
         isUsingGps = true;
-        try {
-            const res = await fetch(`/api/ters-kod?lat=${userGpsLat}&lon=${userGpsLon}`);
-            const data = await res.json();
-            if(data.status === 'success') {
-                document.getElementById('baslangic-input').value = data.display_name;
-                document.getElementById('yakit-istasyon').value = data.display_name;
-                konumAdiniGuncelle(data.display_name);
-                if(data.il) {
-                    const ilSelect = document.getElementById('il-select');
-                    if([...ilSelect.options].some(o => o.value === data.il)) {
-                        ilSelect.value = data.il;
-                        await ilDegisti();
-                    }
-                }
+        secilenKoordinatlar['baslangic-input'] = [userGpsLat, userGpsLon];
+
+        const veri = await nominatimTersKod(userGpsLat, userGpsLon);
+        let ilDegisti_yapildi = false;
+        if(veri) {
+            const adres = veri.address || {};
+            const ilce = adres.town || adres.district || adres.suburb || adres.county || '';
+            const ilAdi = adres.province || adres.state || '';
+            const kisaAd = [ilce, ilAdi].filter(Boolean).join(', ') || (veri.display_name || '').slice(0, 60);
+            document.getElementById('baslangic-input').value = veri.display_name || kisaAd;
+            document.getElementById('yakit-istasyon').value = veri.display_name || kisaAd;
+            konumAdiniGuncelle(kisaAd);
+            const ilSlug = turkceSlug(ilAdi);
+            const ilSelect = document.getElementById('il-select');
+            if(ilSlug && [...ilSelect.options].some(o => o.value === ilSlug) && ilSelect.value !== ilSlug) {
+                ilSelect.value = ilSlug;
+                await ilDegisti(); // bu zaten enYakinBenzinlikleriBul'u çağırır
+                ilDegisti_yapildi = true;
             }
-        } catch(e) {}
+        } else {
+            konumAdiniGuncelle('Konumunuz');
+        }
+
         if(!map) initMap();
         map.setView([userGpsLat, userGpsLon], 14);
         if(markerStart) map.removeLayer(markerStart);
         markerStart = L.marker([userGpsLat, userGpsLon]).addTo(map).bindPopup("Konumunuz").openPopup();
-        enYakinBenzinlikleriBul();
-    }, () => alert("Konum alınamadı."));
+        if(!ilDegisti_yapildi) enYakinBenzinlikleriBul();
+    }, () => alert("Konum alınamadı. Tarayıcı konum iznini kontrol edin."));
 }
 
 async function koordinatBul(yerAdi) {
-    try {
-        const res = await fetch(`/api/koordinat?yer=${encodeURIComponent(yerAdi)}`);
-        const data = await res.json();
-        if (data && data.status === 'success') return [data.lat, data.lon];
-    } catch(e) {}
+    if(!yerAdi) return null;
+    const sonuclar = await nominatimAra(yerAdi, 1);
+    if(sonuclar && sonuclar.length > 0) return [parseFloat(sonuclar[0].lat), parseFloat(sonuclar[0].lon)];
     return null;
 }
 
@@ -423,14 +597,19 @@ async function enYakinBenzinlikleriBul() {
     if (!centerCoords) centerCoords = [38.6749, 39.2225];
     if(!map) initMap();
     map.setView(centerCoords, 13);
-    try {
-        const res = await fetch(`/api/benzinlikler?lat=${centerCoords[0]}&lon=${centerCoords[1]}&radius=8`);
-        const data = await res.json();
-        if(data.status === 'success' && data.stations) {
-            globalStations = data.stations;
-            haritadaGoster(globalStations);
-        }
-    } catch(e) {}
+
+    const durumEl = document.getElementById('istasyon-durum');
+    if(durumEl) durumEl.innerText = '🔎 İstasyonlar aranıyor...';
+
+    const istasyonlar = await overpassIstasyonlariBul(centerCoords[0], centerCoords[1]);
+    globalStations = istasyonlar;
+    haritadaGoster(globalStations);
+
+    if(durumEl) {
+        durumEl.innerText = istasyonlar.length > 0
+            ? `✅ ${istasyonlar.length} istasyon bulundu`
+            : '⚠️ Bu bölgede haritalanmış istasyon bulunamadı (OpenStreetMap verisi eksik olabilir)';
+    }
 }
 
 function haritadaGoster(stations) {
@@ -446,7 +625,7 @@ function haritadaGoster(stations) {
             icon: L.divIcon({
                 className: 'custom-icon',
                 html: `<div style="display:flex;align-items:center;gap:4px;background:${bColor};color:white;padding:3px 8px 3px 3px;border-radius:20px;font-size:10px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);">
-                    <img src="${getLogoUrl(effBrand)}" style="width:16px;height:16px;border-radius:50%;background:#fff;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+                    <img src="${getLogoUrl(effBrand)}" style="width:16px;height:16px;border-radius:50%;background:#fff;object-fit:contain;flex-shrink:0;" onerror="this.onerror=null;this.src=yerelIkonSVG('${effBrand.replace(/'/g, "\\'")}')">
                     <span>⛽ ${effBrand}</span>
                 </div>`,
                 iconSize: [110, 24],
@@ -590,6 +769,7 @@ async function fiyatlariGetir() {
             globalMarkalar = res.markalar;
             kartlariOlustur(globalMarkalar);
             if(globalStations.length > 0) haritadaGoster(globalStations);
+            if(document.getElementById('rota-maliyet-listesi')) maliyetHesapla();
         }
     } catch(e) {
         document.getElementById('data-source').innerText = 'Kaynak: Bağlantı hatası';
@@ -618,7 +798,7 @@ function kartlariOlustur(markalar) {
         <div class="company-card ${isFav ? 'is-favorite' : ''}" onclick="istasyonuYakitaSec('${m.firma}')">
             <div class="card-header">
                 <div class="company-brand">
-                    <img src="${logo}" class="brand-logo" onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.firma)}&background=${renkHashi(m.firma).replace('#','')}&color=fff&bold=true&length=2'">
+                    <img src="${logo}" class="brand-logo" data-asama="0" onerror="logoHataYonet(this, '${m.firma.replace(/'/g, "\\'")}')">
                     <span class="company-title">${m.firma}</span>
                 </div>
                 <button class="fav-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${m.firma}', event)">${isFav ? '★' : '☆'}</button>
