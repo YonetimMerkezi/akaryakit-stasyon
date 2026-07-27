@@ -19,7 +19,7 @@ import logging
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -658,13 +658,19 @@ def fiyat_cek(il: str = 'elazig') -> dict:
     # 3. Tek-markalı resmi site scraper'larını PARALEL çalıştır ve birleştir.
     #    (Eskiden ilk başarılı olan kazanıyordu; bu yüzden örn. Opet
     #    başarılı olduğunda Shell/PetrolOfisi/TotalEnergies hiç denenmiyordu.)
+    #    NOT: as_completed(..., timeout=N) kullanmıyoruz çünkü N saniye içinde
+    #    HEPSİ bitmezse TimeoutError FIRLATIR ve bu da /api/fiyatlar'ı 500
+    #    hatasına düşürüp frontend'de "Bağlantı hatası" gösterirdi. wait()
+    #    asla hata fırlatmaz — o ana kadar bitenleri, bitmeyenleri ayrı ayrı
+    #    döner, biz de sadece bitenleri kullanırız.
     tekli_sonuclar = []
     tekli_kaynak_adlari = []
     with ThreadPoolExecutor(max_workers=len(_TEK_MARKALI_KAYNAKLAR)) as havuz:
         gelecekler = {
             havuz.submit(fn, il): ad for ad, fn in _TEK_MARKALI_KAYNAKLAR
         }
-        for gelecek in as_completed(gelecekler, timeout=15):
+        tamamlanan, tamamlanmayan = wait(gelecekler.keys(), timeout=18)
+        for gelecek in tamamlanan:
             ad = gelecekler[gelecek]
             try:
                 markalar, kaynak = gelecek.result()
@@ -673,6 +679,11 @@ def fiyat_cek(il: str = 'elazig') -> dict:
                     tekli_kaynak_adlari.append(kaynak)
             except Exception as e:
                 logger.error('%s kaynağında beklenmedik hata: %s', ad, e)
+        if tamamlanmayan:
+            logger.warning(
+                '%d kaynak zaman aşımına uğradı (il=%s): %s',
+                len(tamamlanmayan), il, [gelecekler[g] for g in tamamlanmayan],
+            )
 
     tum_markalar = _markalari_birlestir(cok_markali_sonuc, *tekli_sonuclar)
 

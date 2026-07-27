@@ -201,7 +201,21 @@ def index():
 @app.route('/api/fiyatlar')
 def api_fiyatlar():
     il = request.args.get('il', 'elazig').lower().strip()
-    sonuc = fiyat_cek(il)
+    try:
+        sonuc = fiyat_cek(il)
+    except Exception as e:
+        # Buradaki HERHANGİ bir beklenmedik hata Flask'ın 500 HTML sayfasına
+        # düşerse, frontend'in response.json() çağrısı patlar ve kullanıcı
+        # "Kaynak: Bağlantı hatası" görür. Bunun yerine düzgün bir JSON hata
+        # yanıtı dönüyoruz ki frontend en azından anlamlı bir mesaj gösterebilsin.
+        logger.error('fiyat_cek beklenmedik şekilde başarısız oldu (il=%s): %s', il, e)
+        return jsonify({
+            'status': 'error',
+            'source': 'Sunucu hatası',
+            'guncelleme': '',
+            'canli': False,
+            'markalar': [],
+        }), 200
 
     # Zaman bilgisini okunabilir formata çevir
     try:
