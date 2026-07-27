@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -59,6 +60,51 @@ IL_SLUG_MAP = {
     'samsun': 'samsun',
     'trabzon': 'trabzon',
 }
+
+# BP Petrolleri A.Ş., Petrol Ofisi Grubu ile birleşti (birleşme Kasım 2026'da
+# tamamlanacak marka dönüşümüyle sonuçlanıyor). Bu yüzden hangi kaynaktan
+# "BP" olarak gelirse gelsin, artık Petrol Ofisi ile aynı firma olarak
+# birleştiriyoruz.
+MARKA_NORMALIZE = {
+    'bp': 'Petrol Ofisi',
+    'bp türkiye': 'Petrol Ofisi',
+    'bp petrolleri': 'Petrol Ofisi',
+}
+
+
+def _marka_normalize(firma: str) -> str:
+    """Firma adını normalize eder (örn. BP -> Petrol Ofisi birleşmesi)."""
+    if not firma:
+        return firma
+    anahtar = firma.strip().lower()
+    return MARKA_NORMALIZE.get(anahtar, firma.strip())
+
+
+def _markalari_birlestir(*marka_listeleri: list) -> list:
+    """Birden fazla kaynaktan gelen marka listelerini, aynı firmaları
+    tekilleştirerek (BP/Petrol Ofisi birleşmesi dahil) tek listede toplar.
+    Bir firma için birden fazla kaynaktan veri gelirse, dolu olan alanlar
+    korunur (ilk gelen kaynak öncelikli, boş alanlar sonraki kaynaklarla
+    tamamlanır)."""
+    birlesik: dict[str, dict] = {}
+    sira: list[str] = []
+    for liste in marka_listeleri:
+        if not liste:
+            continue
+        for m in liste:
+            firma = _marka_normalize(m.get('firma', ''))
+            if not firma:
+                continue
+            anahtar = firma.lower()
+            if anahtar not in birlesik:
+                birlesik[anahtar] = {'firma': firma, 'benzin': None, 'motorin': None, 'lpg': None}
+                sira.append(anahtar)
+            hedef = birlesik[anahtar]
+            for alan in ('benzin', 'motorin', 'lpg'):
+                if hedef.get(alan) is None and m.get(alan) is not None:
+                    hedef[alan] = m.get(alan)
+    return [birlesik[k] for k in sira if birlesik[k].get('benzin') or birlesik[k].get('motorin')]
+
 
 ORTAK_HEADERS = {
     'User-Agent': (
@@ -496,15 +542,69 @@ def _petrolofisi_cek(il: str) -> tuple[list | None, str]:
     return None, ''
 
 
+# ─── Kaynak 6: TotalEnergies scraper ──────────────────────────────────────────
+
+def _totalenergies_cek(il: str) -> tuple[list | None, str]:
+    """
+    TotalEnergies Türkiye güncel akaryakıt fiyatlarını çeker.
+    Not: Daha önce bu kaynak hiç yoktu — 'Total enerji verileri yok' sorununun
+    doğrudan sebebi buydu. Önce il bazlı sayfa denenir, olmazsa ülke geneli.
+    """
+    slug = IL_SLUG_MAP.get(il.lower(), il.lower())
+    denenecek_urller = [
+        f'https://akaryakitfiyatlari.net/{slug}-totalenergies-akaryakit-fiyatlari',
+        'https://akaryakitfiyatlari.net/totalenergies-akaryakit-fiyatlari',
+    ]
+    for url in denenecek_urller:
+        try:
+            s = _session_olustur('https://akaryakitfiyatlari.net/')
+            r = s.get(url, timeout=10)
+            if r.status_code != 200:
+                continue
+
+            soup = BeautifulSoup(r.text, 'html.parser')
+            metin = soup.get_text(separator=' ', strip=True)
+            fiyatlar = {}
+            patterns = [
+                ('benzin', r'Benzin[:\s]{1,5}(\d{2,3}[.,]\d{2})'),
+                ('motorin', r'Motorin[:\s]{1,5}(\d{2,3}[.,]\d{2})'),
+                ('lpg', r'LPG[:\s]{1,5}(\d{2,3}[.,]\d{2})'),
+            ]
+            for yakıt, pattern in patterns:
+                m = re.search(pattern, metin, re.IGNORECASE)
+                if m:
+                    fiyat = _fiyat_parse(m.group(1))
+                    if fiyat:
+                        fiyatlar[yakıt] = fiyat
+
+            if fiyatlar.get('benzin') or fiyatlar.get('motorin'):
+                return [{'firma': 'TotalEnergies', **fiyatlar}], 'TotalEnergies'
+
+        except Exception as e:
+            logger.error('TotalEnergies scraper hatası (%s): %s', url, e)
+    return None, ''
+
+
 # ─── Ana servis fonksiyonu ────────────────────────────────────────────────────
 
-_KAYNAKLAR = [
+# Çok-markalı (tek çağrıda birden fazla firma döndüren) kaynaklar.
+# Biri başarılı olursa tek başına yeterli sayılır.
+_COK_MARKALI_KAYNAKLAR = [
     ('Worker', _worker_cek),
     ('CollectAPI', _collectapi_cek),
+]
+
+# Tek-markalı (her biri SADECE kendi firmasının fiyatını döndüren) resmi
+# site scraper'ları. ÖNEMLİ: Bunlar eskiden "ilk başarılı olan kazanır"
+# mantığıyla çalıştırılıyordu — yani Opet başarılı olduğunda Shell,
+# PetrolOfisi, Aytemiz ve TotalEnergies hiç denenmiyor, tek kart
+# görünüyordu. Şimdi HEPSİ paralel çalıştırılıp birleştiriliyor.
+_TEK_MARKALI_KAYNAKLAR = [
     ('Opet', _opet_cek),
     ('Alpet', _alpet_cek),
     ('Shell', _shell_cek),
     ('PetrolOfisi', _petrolofisi_cek),
+    ('TotalEnergies', _totalenergies_cek),
 ]
 
 _YEDEK_FIYATLAR = [
@@ -542,24 +642,53 @@ def fiyat_cek(il: str = 'elazig') -> dict:
             'canli': False,
         }
 
-    # 2. Kaynakları sırayla dene
-    for kaynak_adi, kaynak_fn in _KAYNAKLAR:
+    # 2. Çok-markalı kaynakları sırayla dene (biri tutarsa yeterli)
+    cok_markali_sonuc = None
+    cok_markali_kaynak_adi = ''
+    for kaynak_adi, kaynak_fn in _COK_MARKALI_KAYNAKLAR:
         try:
             markalar, kaynak = kaynak_fn(il)
             if markalar:
-                logger.info('Canlı veri alındı: %s — %s (%d marka)', il, kaynak, len(markalar))
-                zaman = datetime.now().isoformat()
-                _cache_yaz(il, markalar, kaynak)
-                return {
-                    'markalar': markalar,
-                    'kaynak': kaynak,
-                    'zaman': zaman,
-                    'canli': True,
-                }
+                cok_markali_sonuc = markalar
+                cok_markali_kaynak_adi = kaynak
+                break
         except Exception as e:
             logger.error('%s kaynağında beklenmedik hata: %s', kaynak_adi, e)
 
-    # 3. Eski cache (TTL dolmuş olsa bile)
+    # 3. Tek-markalı resmi site scraper'larını PARALEL çalıştır ve birleştir.
+    #    (Eskiden ilk başarılı olan kazanıyordu; bu yüzden örn. Opet
+    #    başarılı olduğunda Shell/PetrolOfisi/TotalEnergies hiç denenmiyordu.)
+    tekli_sonuclar = []
+    tekli_kaynak_adlari = []
+    with ThreadPoolExecutor(max_workers=len(_TEK_MARKALI_KAYNAKLAR)) as havuz:
+        gelecekler = {
+            havuz.submit(fn, il): ad for ad, fn in _TEK_MARKALI_KAYNAKLAR
+        }
+        for gelecek in as_completed(gelecekler, timeout=15):
+            ad = gelecekler[gelecek]
+            try:
+                markalar, kaynak = gelecek.result()
+                if markalar:
+                    tekli_sonuclar.append(markalar)
+                    tekli_kaynak_adlari.append(kaynak)
+            except Exception as e:
+                logger.error('%s kaynağında beklenmedik hata: %s', ad, e)
+
+    tum_markalar = _markalari_birlestir(cok_markali_sonuc, *tekli_sonuclar)
+
+    if tum_markalar:
+        kaynak_etiketi = ' + '.join(filter(None, [cok_markali_kaynak_adi] + tekli_kaynak_adlari)) or 'Bilinmeyen'
+        logger.info('Canlı veri alındı: %s — %s (%d marka)', il, kaynak_etiketi, len(tum_markalar))
+        zaman = datetime.now().isoformat()
+        _cache_yaz(il, tum_markalar, kaynak_etiketi)
+        return {
+            'markalar': tum_markalar,
+            'kaynak': kaynak_etiketi,
+            'zaman': zaman,
+            'canli': True,
+        }
+
+    # 3b. Eski cache (TTL dolmuş olsa bile)
     eski = _eski_cache_oku(il)
     if eski:
         logger.warning('Tüm kaynaklar başarısız, eski cache kullanılıyor: %s', il)

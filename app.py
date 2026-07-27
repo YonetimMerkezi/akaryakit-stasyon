@@ -33,6 +33,18 @@ IL_NORMALIZE = {
 }
 
 
+def _marka_normalize(marka: str) -> str:
+    """BP Petrolleri A.Ş., Petrol Ofisi Grubu ile birleşti (marka dönüşümü
+    Kasım 2026'da tamamlanacak) — OSM üzerindeki eski 'BP' etiketlerini de
+    Petrol Ofisi olarak normalize ediyoruz."""
+    if not marka:
+        return marka
+    temiz = marka.strip().lower()
+    if temiz in ('bp', 'bp türkiye', 'bp petrolleri') or temiz.startswith('bp '):
+        return 'Petrol Ofisi'
+    return marka
+
+
 def _slugla(metin: str) -> str:
     if not metin:
         return ''
@@ -141,7 +153,7 @@ def _overpass_istasyonlari_cek(lat: float, lon: float, yaricap_m: int = 8000, li
             if slat is None or slon is None:
                 continue
             etiketler = el.get('tags', {})
-            marka = etiketler.get('brand') or etiketler.get('operator') or etiketler.get('name') or 'Bilinmeyen'
+            marka = _marka_normalize(etiketler.get('brand') or etiketler.get('operator') or etiketler.get('name') or 'Bilinmeyen')
             isim = etiketler.get('name') or marka
             istasyonlar.append({
                 'name': isim,
