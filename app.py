@@ -102,7 +102,7 @@ def _overpass_sorgu_calistir(query: str) -> dict | None:
     """Birden fazla Overpass aynasını sırayla dener (biri yavaş/erişilemez olursa diğerine geçer)."""
     for mirror in OVERPASS_URLS:
         try:
-            r = requests.post(mirror, data={'data': query}, timeout=20)
+            r = requests.post(mirror, data={'data': query}, headers=NOMINATIM_HEADERS, timeout=20)
             if r.status_code == 200:
                 return r.json()
             logger.warning('Overpass %s HTTP %d', mirror, r.status_code)
