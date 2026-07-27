@@ -145,6 +145,7 @@ header {
                 <button class="filter-chip" onclick="filtreleMarka('Shell')">Shell</button>
                 <button class="filter-chip" onclick="filtreleMarka('Petrol Ofisi')">Petrol Ofisi</button>
                 <button class="filter-chip" onclick="filtreleMarka('Aytemiz')">Aytemiz</button>
+                <button class="filter-chip" onclick="filtreleMarka('TotalEnergies')">TotalEnergies</button>
             </div>
             <div id="istasyon-durum" style="font-size:11px; font-weight:700; color:var(--text-muted); text-align:center; margin-bottom:6px;"></div>
             <div id="map"></div>
@@ -258,7 +259,7 @@ const DOMAIN_MAP = {
     'petrol ofisi': 'petrolofisi.com.tr', 'shell': 'shell.com.tr', 'opet': 'opet.com.tr',
     'aytemiz': 'aytemiz.com.tr', 'totalenergies': 'totalenergiesistasyonlari.com.tr', 'aygaz': 'aygaz.com.tr',
     'alpet': 'alpet.com.tr', 'kadoil': 'kadoil.com', 'lukoil': 'lukoil.com', 'bp': 'bp.com',
-    'go': 'goyakit.com.tr',
+    'go': 'goyakit.com.tr', 'moil': 'totalenerji.com.tr',
 };
 // Domanı bilinmeyen (küçük/bölgesel bayi) markalar için sabit, ayırt edici renk paleti
 const FALLBACK_PALETTE = ['#0284c7','#7c3aed','#db2777','#059669','#d97706','#dc2626','#0891b2','#4338ca','#65a30d','#c026d3'];
@@ -407,14 +408,21 @@ function yerelIkonSVG(firma) {
 }
 
 function logoHataYonet(img, firma) {
-    if (img.src.indexOf('ui-avatars.com') !== -1) {
-        img.onerror = null;
-        img.src = yerelIkonSVG(firma);
+    const asama = parseInt(img.dataset.asama || '0', 10);
+    const domain = domainForBrand(firma);
+    if (asama === 0 && domain) {
+        img.dataset.asama = '1';
+        img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
         return;
     }
-    const renk = renkHashi(firma).replace('#', '');
-    img.onerror = function() { logoHataYonet(img, firma); };
-    img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(firma)}&background=${renk}&color=fff&bold=true&length=2`;
+    if (img.src.indexOf('ui-avatars.com') === -1) {
+        img.dataset.asama = '2';
+        const renk = renkHashi(firma).replace('#', '');
+        img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(firma)}&background=${renk}&color=fff&bold=true&length=2`;
+        return;
+    }
+    img.onerror = null;
+    img.src = yerelIkonSVG(firma);
 }
 
 function sekmeDegis(tabId, btn) {
@@ -432,9 +440,15 @@ function initMap() {
     L.control.layers({ "Sokak": osmLayer, "Uydu": satelliteLayer }).addTo(map);
 }
 
-function getLogoUrl(firma) {
+function domainForBrand(firma) {
     const name = firma.toLowerCase().trim();
-    for (let key in DOMAIN_MAP) { if (name.includes(key)) return `https://www.google.com/s2/favicons?domain=${DOMAIN_MAP[key]}&sz=128`; }
+    for (let key in DOMAIN_MAP) { if (name.includes(key)) return DOMAIN_MAP[key]; }
+    return null;
+}
+
+function getLogoUrl(firma) {
+    const domain = domainForBrand(firma);
+    if (domain) return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
     const renk = renkHashi(firma).replace('#', '');
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(firma)}&background=${renk}&color=fff&bold=true&length=2`;
 }
@@ -536,14 +550,20 @@ function maliyetHesapla() {
         return;
     }
 
-    const siraliMarkalar = [...globalMarkalar].sort((a, b) => (a.motorin || a.benzin || 999) - (b.motorin || b.benzin || 999));
+    const siraliMarkalar = [...globalMarkalar].sort((a, b) => (a.motorin || a.benzin || a.lpg || 999) - (b.motorin || b.benzin || b.lpg || 999));
     let satirlar = '';
     siraliMarkalar.forEach(m => {
         const benzinMaliyet = m.benzin ? (m.benzin * gerekliLitre).toFixed(2) : null;
         const motorinMaliyet = m.motorin ? (m.motorin * gerekliLitre).toFixed(2) : null;
+        const lpgMaliyet = m.lpg ? (m.lpg * gerekliLitre).toFixed(2) : null;
+        const parcalar = [
+            benzinMaliyet ? 'Benzin ' + benzinMaliyet + '₺' : null,
+            motorinMaliyet ? 'Motorin ' + motorinMaliyet + '₺' : null,
+            lpgMaliyet ? 'LPG ' + lpgMaliyet + '₺' : null,
+        ].filter(Boolean).join(' · ');
         satirlar += `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 4px; border-bottom:1px solid #f1f5f9;">
             <span style="font-weight:700; font-size:13px;">${favorites.includes(m.firma) ? '★ ' : ''}${m.firma}</span>
-            <span style="font-size:12px; color:var(--text-muted); text-align:right;">${benzinMaliyet ? 'Benzin ' + benzinMaliyet + '₺' : ''}${benzinMaliyet && motorinMaliyet ? ' · ' : ''}${motorinMaliyet ? 'Motorin ' + motorinMaliyet + '₺' : ''}</span>
+            <span style="font-size:12px; color:var(--text-muted); text-align:right;">${parcalar}</span>
         </div>`;
     });
 
