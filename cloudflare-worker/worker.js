@@ -55,6 +55,23 @@ async function tumIllerCek() {
   return Object.keys(iller).length > 0 ? iller : null;
 }
 
+// Sitenin firma tablosu artık istemci tarafında (JS ile) dolduruluyor, bu
+// yüzden düz fetch() ile çoğu zaman boş <tbody> geliyor (LPG dahil hiçbir
+// firma satırı gelmiyor). Ancak sayfanın üstündeki "Benzin xx,xx ₺ / Motorin
+// xx,xx ₺ / Otogaz xx,xx ₺" rozetleri sunucu tarafında render ediliyor ve
+// her zaman güvenilir şekilde geliyor. Firma tablosu boşsa bunu yedek olarak
+// kullanıyoruz — böylece LPG dahil hiçbir zaman veri "gelmiyor" durumu
+// oluşmuyor.
+function ilOrtalamaCek(html) {
+  const benzin = (html.match(/Benzin\s*(\d{2,3}[.,]\d{2})\s*₺/i) || [])[1];
+  const motorin = (html.match(/Motorin\s*(\d{2,3}[.,]\d{2})\s*₺/i) || [])[1];
+  const lpg = (html.match(/Otogaz\s*(\d{2,3}[.,]\d{2})\s*₺/i) || [])[1];
+
+  const b = parseFiyat(benzin), m = parseFiyat(motorin), l = parseFiyat(lpg);
+  if (!b && !m) return null;
+  return [{ firma: 'Piyasa Ortalaması (İl Geneli)', benzin: b, motorin: m, lpg: l }];
+}
+
 // İl detay sayfasından firma bazlı fiyat çek
 async function ilDetayCek(slug) {
   const r = await fetch(`https://akaryakit.org/${slug}-akaryakit-fiyatlari`, { headers: HEADERS });
@@ -62,28 +79,32 @@ async function ilDetayCek(slug) {
   const html = await r.text();
 
   const tbodyIdx = html.indexOf('<tbody>');
-  if (tbodyIdx === -1) return null;
-  const tbodyHtml = html.substring(tbodyIdx + 7);
+  let markalar = [];
 
-  const satirlar = tbodyHtml.split('<tr>').filter(s => s.includes('<td'));
-  const markalar = [];
+  if (tbodyIdx !== -1) {
+    const tbodyHtml = html.substring(tbodyIdx + 7);
+    const satirlar = tbodyHtml.split('<tr>').filter(s => s.includes('<td'));
 
-  for (const satir of satirlar) {
-    const tdler = [...satir.matchAll(/<td[^>]*>(.*?)(?=<td|<tr|<th|$)/gi)]
-      .map(m => htmlDecode(m[1].replace(/<[^>]+>/g, '').trim()));
+    for (const satir of satirlar) {
+      const tdler = [...satir.matchAll(/<td[^>]*>(.*?)(?=<td|<tr|<th|$)/gi)]
+        .map(m => htmlDecode(m[1].replace(/<[^>]+>/g, '').trim()));
 
-    if (tdler.length < 4) continue;
-    const firma = tdler[0];
-    const benzin = parseFiyat(tdler[1]);
-    const lpg = parseFiyat(tdler[2]);
-    const motorin = parseFiyat(tdler[3]);
+      if (tdler.length < 4) continue;
+      const firma = tdler[0];
+      const benzin = parseFiyat(tdler[1]);
+      const lpg = parseFiyat(tdler[2]);
+      const motorin = parseFiyat(tdler[3]);
 
-    if (firma && firma.length > 1 && (benzin || motorin)) {
-      markalar.push({ firma, benzin, motorin, lpg });
+      if (firma && firma.length > 1 && (benzin || motorin)) {
+        markalar.push({ firma, benzin, motorin, lpg });
+      }
     }
   }
 
-  return markalar.length > 0 ? markalar : null;
+  if (markalar.length > 0) return markalar;
+
+  // Firma tablosu boş geldi (JS ile dolduruluyor) -> il ortalamasına düş
+  return ilOrtalamaCek(html);
 }
 
 export default {
