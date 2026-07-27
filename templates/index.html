@@ -184,6 +184,7 @@ header {
                 <div class="route-field"><label>Mesafe (KM)</label><input type="number" id="mesafe-km" value="100" oninput="maliyetHesapla()"></div>
                 <div class="route-field"><label>100 KM Tüketim (Lt)</label><input type="number" id="tuketim-lt" value="7.0" oninput="maliyetHesapla()" step="0.1"></div>
             </div>
+            <div id="rota-map" style="height:280px; border-radius:14px; margin-top:12px; overflow:hidden;"></div>
         </div>
         <div id="rota-maliyet-listesi"></div>
     </div>
@@ -201,7 +202,12 @@ header {
                 <div class="route-field"><label>Araç Adı / Model</label><input type="text" id="arac-adi" placeholder="Örn: Megane LPG+Benzin"></div>
                 <div class="route-field"><label>Mevcut Kilometre</label><input type="number" id="arac-km" placeholder="45000"></div>
             </div>
-            <button class="btn-main" style="margin-top:6px;" onclick="aracBilgisiniKaydet()">💾 Araç Bilgilerini Kaydet</button>
+            <div style="margin-top:16px;">
+                <label style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em;">Yakıt Depoları</label>
+                <div id="depo-listesi" style="margin-top:8px;"></div>
+                <button type="button" class="toggle-station-btn" style="margin-top:4px; width:100%;" onclick="depoEkle()">➕ Depo Ekle</button>
+            </div>
+            <button class="btn-main" style="margin-top:16px;" onclick="aracBilgisiniKaydet()">💾 Araç Bilgilerini Kaydet</button>
         </div>
 
         <div class="calc-card">
@@ -211,13 +217,13 @@ header {
                 <div class="route-field"><label>Saat</label><input type="time" id="log-saat"></div>
             </div>
             <div class="route-field" style="margin-bottom: 12px;">
-                <label>Kilometre sayacı</label>
+                <label>Kilometre sayacı *</label>
                 <input type="number" id="log-km" placeholder="Örn: 152735">
                 <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;" id="son-km-bilgi">Son kilometre: 0 km</small>
             </div>
             <div class="route-field" style="margin-bottom: 12px;">
                 <label>Yakıt Türü</label>
-                <select id="log-yakit-turu"><option value="LPG">LPG</option><option value="Benzin">Benzin</option><option value="Motorin">Motorin</option></select>
+                <select id="log-yakit-turu" onchange="fiyatOtomatikDoldur()"><option value="LPG">LPG</option><option value="Benzin">Benzin</option><option value="Motorin">Motorin</option></select>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
                 <div class="route-field"><label>Fiyat / L</label><input type="text" id="log-fiyat" placeholder="30,69" oninput="hesaplaYakit('fiyat')"></div>
@@ -226,7 +232,10 @@ header {
             </div>
             <div class="route-field" style="margin-bottom: 12px;">
                 <label>Benzin istasyonu</label>
-                <input type="text" id="yakit-istasyon" placeholder="Örn: Opet Ataşehir">
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="yakit-istasyon" placeholder="Örn: Opet Ataşehir" oninput="yakitIstasyonMarkasiSecili=null" style="flex:1;">
+                    <button type="button" class="toggle-station-btn" style="white-space:nowrap; padding:0 14px;" onclick="istasyonuKonumdanBul(event)">📍 Konumdan Bul</button>
+                </div>
             </div>
             <button class="btn-main btn-success" onclick="yakitAlimiKaydetYeni()">➕ Yakıt Alımını Kaydet</button>
         </div>
@@ -234,6 +243,11 @@ header {
         <div class="calc-card">
             <div class="calc-title">📋 Yakıt Alım Geçmişi</div>
             <div id="yakit-gecmis-listesi" style="font-size: 12px; color: var(--text-muted);">Henüz yakıt alımı kaydedilmemiş.</div>
+        </div>
+
+        <div class="calc-card">
+            <div class="calc-title">📊 Yakıt Türüne Göre Tüketim</div>
+            <div id="tur-istatistikleri" style="font-size: 12px; color: var(--text-muted);">Yeterli veri yok (aynı yakıt türünden en az 2 dolum ve km bilgisi gerekli).</div>
         </div>
     </div>
 </div>
@@ -259,18 +273,69 @@ let favorites = JSON.parse(localStorage.getItem('fuel_favs') || '[]');
 let customBrands = JSON.parse(localStorage.getItem('station_custom_brands') || '{}');
 let eskiFiyatlar = JSON.parse(localStorage.getItem('fuel_old_prices') || '{}');
 let yakitLoglari = JSON.parse(localStorage.getItem('fuel_logs') || '[]');
-let aracProfil = JSON.parse(localStorage.getItem('fuel_car_profile') || '{"adi":"","turu":[],"depoB":45,"depoL":40,"km":0}');
+let aracProfil = JSON.parse(localStorage.getItem('fuel_car_profile') || '{"adi":"","km":0,"depolar":[]}');
+if (!Array.isArray(aracProfil.depolar)) aracProfil.depolar = [];
+let depolar = JSON.parse(JSON.stringify(aracProfil.depolar));
+let yakitIstasyonMarkasiSecili = null;
+
+function depoSatiriHtml(depo, idx) {
+    return `<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        <select style="flex:1;" onchange="depoGuncelle(${idx}, 'tur', this.value)">
+            <option value="Benzin" ${depo.tur==='Benzin'?'selected':''}>Benzin</option>
+            <option value="Motorin" ${depo.tur==='Motorin'?'selected':''}>Motorin</option>
+            <option value="LPG" ${depo.tur==='LPG'?'selected':''}>LPG</option>
+        </select>
+        <input type="number" style="width:100px;" placeholder="Litre" value="${depo.kapasite || ''}" oninput="depoGuncelle(${idx}, 'kapasite', this.value)">
+        <button type="button" onclick="depoSil(${idx})" style="background:none; border:none; color:var(--danger); font-weight:bold; cursor:pointer; font-size:16px; padding:4px 8px;">✕</button>
+    </div>`;
+}
+function depoListesiCiz() {
+    const el = document.getElementById('depo-listesi');
+    el.innerHTML = depolar.length > 0
+        ? depolar.map((d, i) => depoSatiriHtml(d, i)).join('')
+        : '<div style="font-size:12px; color:var(--text-muted); padding:4px 0;">Henüz depo eklenmedi. Örn: Benzin 45L + LPG 40L gibi birden fazla depo ekleyebilirsiniz.</div>';
+    logYakitTuruSecenekleriniGuncelle();
+}
+function depoEkle() {
+    depolar.push({ tur: 'Benzin', kapasite: 45 });
+    depoListesiCiz();
+}
+function depoGuncelle(idx, alan, deger) {
+    if(!depolar[idx]) return;
+    depolar[idx][alan] = alan === 'kapasite' ? (parseFloat(deger) || 0) : deger;
+    if(alan === 'tur') logYakitTuruSecenekleriniGuncelle();
+}
+function depoSil(idx) {
+    depolar.splice(idx, 1);
+    depoListesiCiz();
+}
+function logYakitTuruSecenekleriniGuncelle() {
+    const sel = document.getElementById('log-yakit-turu');
+    if(!sel) return;
+    const mevcut = sel.value;
+    const turler = depolar.length > 0 ? [...new Set(depolar.map(d => d.tur))] : ['Benzin', 'Motorin', 'LPG'];
+    sel.innerHTML = turler.map(t => `<option value="${t}">${t}</option>`).join('');
+    if(turler.includes(mevcut)) sel.value = mevcut;
+    fiyatOtomatikDoldur();
+}
 
 let globalMarkalar = [];
 let globalStations = [];
 let aktifFiltre = 'Tümü';
 let map = null;
 let markerStart = null, markerEnd = null, polyline = null;
+let rotaMarkerStart = null, rotaMarkerEnd = null, rotaPolyline = null;
 let stationMarkers = [];
 let userGpsLat = null, userGpsLon = null, isUsingGps = false, stationsVisible = true;
 
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' });
 const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' });
+const rotaOsmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' });
+let rotaMap = null;
+function initRotaMap() {
+    if (rotaMap) return;
+    rotaMap = L.map('rota-map', { layers: [rotaOsmLayer] }).setView([38.6749, 39.2225], 6);
+}
 
 // ─── Konum servisleri: DOĞRUDAN TARAYICIDAN (Nominatim/Overpass), sunucu üzerinden değil ───
 // Bu sayede paylaşımlı sunucu IP'sinin (Render vb.) bu ücretsiz servisler tarafından
@@ -358,6 +423,7 @@ function sekmeDegis(tabId, btn) {
     document.getElementById(tabId).classList.add('active');
     btn.classList.add('active');
     if(tabId === 'fiyatlar-tab' && map) { setTimeout(() => map.invalidateSize(), 200); }
+    if(tabId === 'rota-tab') { if(!rotaMap) initRotaMap(); setTimeout(() => rotaMap.invalidateSize(), 200); }
 }
 
 function initMap() {
@@ -391,9 +457,9 @@ function istasyonlariGosterGizle() {
 }
 
 function rotayiTemizle() {
-    if(markerStart) { map.removeLayer(markerStart); markerStart = null; }
-    if(markerEnd) { map.removeLayer(markerEnd); markerEnd = null; }
-    if(polyline) { map.removeLayer(polyline); polyline = null; }
+    if(rotaMarkerStart) { rotaMap.removeLayer(rotaMarkerStart); rotaMarkerStart = null; }
+    if(rotaMarkerEnd) { rotaMap.removeLayer(rotaMarkerEnd); rotaMarkerEnd = null; }
+    if(rotaPolyline) { rotaMap.removeLayer(rotaPolyline); rotaPolyline = null; }
     document.getElementById('baslangic-input').value = '';
     document.getElementById('varis-input').value = '';
     delete secilenKoordinatlar['baslangic-input'];
@@ -419,13 +485,13 @@ async function rotaBulYazarak(evt) {
             return;
         }
 
-        if(!map) initMap();
-        if(markerStart) map.removeLayer(markerStart);
-        if(markerEnd) map.removeLayer(markerEnd);
-        if(polyline) map.removeLayer(polyline);
+        if(!rotaMap) initRotaMap();
+        if(rotaMarkerStart) rotaMap.removeLayer(rotaMarkerStart);
+        if(rotaMarkerEnd) rotaMap.removeLayer(rotaMarkerEnd);
+        if(rotaPolyline) rotaMap.removeLayer(rotaPolyline);
 
-        markerStart = L.marker(baslamaKoord).addTo(map).bindPopup('🟢 Başlangıç: ' + baslangicMetin);
-        markerEnd = L.marker(varisKoord).addTo(map).bindPopup('🔴 Varış: ' + varisMetin);
+        rotaMarkerStart = L.marker(baslamaKoord).addTo(rotaMap).bindPopup('🟢 Başlangıç: ' + baslangicMetin);
+        rotaMarkerEnd = L.marker(varisKoord).addTo(rotaMap).bindPopup('🔴 Varış: ' + varisMetin);
 
         try {
             const url = `https://router.project-osrm.org/route/v1/driving/${baslamaKoord[1]},${baslamaKoord[0]};${varisKoord[1]},${varisKoord[0]}?overview=full&geometries=geojson`;
@@ -434,8 +500,8 @@ async function rotaBulYazarak(evt) {
             if(data.code === 'Ok' && data.routes && data.routes[0]) {
                 const rota = data.routes[0];
                 const koordlar = rota.geometry.coordinates.map(c => [c[1], c[0]]);
-                polyline = L.polyline(koordlar, { color: '#0284c7', weight: 5, opacity: 0.85 }).addTo(map);
-                map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+                rotaPolyline = L.polyline(koordlar, { color: '#0284c7', weight: 5, opacity: 0.85 }).addTo(rotaMap);
+                rotaMap.fitBounds(rotaPolyline.getBounds(), { padding: [30, 30] });
                 const mesafeKm = (rota.distance / 1000).toFixed(1);
                 const sureDk = Math.round(rota.duration / 60);
                 document.getElementById('mesafe-km').value = mesafeKm;
@@ -446,15 +512,13 @@ async function rotaBulYazarak(evt) {
                 throw new Error('Rota bulunamadı');
             }
         } catch(rotaHatasi) {
-            map.fitBounds(L.latLngBounds([baslamaKoord, varisKoord]), { padding: [40, 40] });
+            rotaMap.fitBounds(L.latLngBounds([baslamaKoord, varisKoord]), { padding: [40, 40] });
             const havaMesafesi = L.latLng(baslamaKoord).distanceTo(L.latLng(varisKoord)) / 1000;
             document.getElementById('mesafe-km').value = havaMesafesi.toFixed(1);
             maliyetHesapla();
             document.getElementById('rota-maliyet-listesi').insertAdjacentHTML('afterbegin',
                 `<div class="calc-card" style="text-align:center; font-size:12px; color:var(--text-muted);">⚠️ Rota servisi şu anda erişilemiyor, kuş uçuşu mesafe (${havaMesafesi.toFixed(1)} km) kullanıldı. Mesafeyi elle düzeltebilirsiniz.</div>`);
         }
-
-        sekmeDegis('fiyatlar-tab', document.querySelector('.tab-btn'));
     } finally {
         if(btn) { btn.disabled = false; btn.innerText = '🔍 Rota Hesapla'; }
     }
@@ -818,17 +882,83 @@ function aracBilgisiniYukle() {
     document.getElementById('arac-adi').value = aracProfil.adi || '';
     document.getElementById('arac-km').value = aracProfil.km || 0;
     document.getElementById('son-km-bilgi').innerText = `Son kilometre: ${aracProfil.km || 0} km`;
+    depolar = Array.isArray(aracProfil.depolar) ? JSON.parse(JSON.stringify(aracProfil.depolar)) : [];
+    depoListesiCiz();
     istatistikleriGuncelle();
 }
 
 function aracBilgisiniKaydet() {
     aracProfil = {
         adi: document.getElementById('arac-adi').value,
-        km: parseFloat(document.getElementById('arac-km').value) || 0
+        km: parseFloat(document.getElementById('arac-km').value) || 0,
+        depolar: depolar,
     };
     localStorage.setItem('fuel_car_profile', JSON.stringify(aracProfil));
     document.getElementById('son-km-bilgi').innerText = `Son kilometre: ${aracProfil.km} km`;
+    logYakitTuruSecenekleriniGuncelle();
     alert("Araç bilgileri kaydedildi!");
+}
+
+async function istasyonuKonumdanBul(evt) {
+    if (!navigator.geolocation) { alert('Tarayıcınız konum servisini desteklemiyor.'); return; }
+    const btn = evt && evt.target;
+    if(btn) { btn.disabled = true; btn.innerText = '⏳...'; }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        try {
+            const [istasyonlar, adresVerisi] = await Promise.all([
+                overpassIstasyonlariBul(lat, lon),
+                nominatimTersKod(lat, lon),
+            ]);
+
+            let enYakin = null, enYakinMesafe = Infinity;
+            istasyonlar.forEach(ist => {
+                const mesafe = L.latLng(lat, lon).distanceTo(L.latLng(ist.lat, ist.lon));
+                if (mesafe < enYakinMesafe) { enYakinMesafe = mesafe; enYakin = ist; }
+            });
+
+            let adresMetni = '';
+            if(adresVerisi) {
+                const a = adresVerisi.address || {};
+                adresMetni = [a.road, a.suburb || a.neighbourhood, a.town || a.district].filter(Boolean).join(', ');
+            }
+
+            if(enYakin && enYakinMesafe < 1500) {
+                document.getElementById('yakit-istasyon').value = `${enYakin.brand}${adresMetni ? ' - ' + adresMetni : ''}`;
+                yakitIstasyonMarkasiSecili = enYakin.brand;
+            } else {
+                document.getElementById('yakit-istasyon').value = adresMetni || 'Konum bulundu, istasyon adı bulunamadı';
+                yakitIstasyonMarkasiSecili = null;
+                if(!enYakin) alert('Yakında haritalanmış bir istasyon bulunamadı, fiyat elle girilmeli.');
+            }
+            fiyatOtomatikDoldur();
+        } catch(e) {
+            alert('Konum/istasyon bilgisi alınamadı.');
+        } finally {
+            if(btn) { btn.disabled = false; btn.innerText = '📍 Konumdan Bul'; }
+        }
+    }, () => {
+        alert('Konum alınamadı. Tarayıcı konum iznini kontrol edin.');
+        if(btn) { btn.disabled = false; btn.innerText = '📍 Konumdan Bul'; }
+    });
+}
+
+function fiyatOtomatikDoldur() {
+    if(!globalMarkalar || globalMarkalar.length === 0 || !yakitIstasyonMarkasiSecili) return;
+    const tur = document.getElementById('log-yakit-turu').value;
+    const marka = yakitIstasyonMarkasiSecili.toLowerCase();
+    const kayit = globalMarkalar.find(m => {
+        const f = m.firma.toLowerCase();
+        return f.includes(marka) || marka.includes(f);
+    });
+    if(!kayit) return;
+    const alanMap = { 'Benzin': 'benzin', 'Motorin': 'motorin', 'LPG': 'lpg' };
+    const fiyat = kayit[alanMap[tur]];
+    if(fiyat) {
+        document.getElementById('log-fiyat').value = fiyat.toFixed(2).replace('.', ',');
+        hesaplaYakit('fiyat');
+    }
 }
 
 function hesaplaYakit(degisenAlan) {
@@ -848,34 +978,93 @@ function hesaplaYakit(degisenAlan) {
 function yakitAlimiKaydetYeni() {
     const tarih = document.getElementById('log-tarih').value;
     const saat = document.getElementById('log-saat').value;
-    const km = document.getElementById('log-km').value;
+    const kmStr = document.getElementById('log-km').value;
     const yakitTuru = document.getElementById('log-yakit-turu').value;
     const istasyon = document.getElementById('yakit-istasyon').value || 'Bilinmeyen İstasyon';
     const litre = parseFloat(document.getElementById('log-litre').value.replace(',', '.'));
     const tutar = parseFloat(document.getElementById('log-tutar').value.replace(',', '.'));
-    
+
     if(!litre || !tutar) { alert("Lütfen geçerli litre ve tutar giriniz."); return; }
-    
+    if(!kmStr) { alert("Yakıt tüketimi hesaplanabilmesi için kilometre sayacını girmeniz gerekiyor."); return; }
+    const km = parseFloat(kmStr);
+
     yakitLoglari.unshift({
         tarih: tarih ? `${tarih} ${saat}` : new Date().toLocaleString('tr-TR'),
-        tur: yakitTuru, istasyon, litre, tutar,
+        tur: yakitTuru, istasyon, litre, tutar, km,
         birimFiyat: (tutar / litre).toFixed(2)
     });
     localStorage.setItem('fuel_logs', JSON.stringify(yakitLoglari));
-    
-    if(km) {
-        aracProfil.km = parseFloat(km);
-        localStorage.setItem('fuel_car_profile', JSON.stringify(aracProfil));
-        document.getElementById('son-km-bilgi').innerText = `Son kilometre: ${aracProfil.km} km`;
-    }
+
+    aracProfil.km = km;
+    localStorage.setItem('fuel_car_profile', JSON.stringify(aracProfil));
+    document.getElementById('son-km-bilgi').innerText = `Son kilometre: ${aracProfil.km} km`;
 
     document.getElementById('log-litre').value = '';
     document.getElementById('log-tutar').value = '';
     document.getElementById('log-fiyat').value = '';
     document.getElementById('log-km').value = '';
-    
+    yakitIstasyonMarkasiSecili = null;
+
     istatistikleriGuncelle();
     alert("Yakıt alımı başarıyla kaydedildi!");
+}
+
+// Full-to-full yöntemi: aynı yakıt türünün ardışık dolumları arasındaki km farkı / o dolumda alınan litre
+function turIstatistikleriniHesapla() {
+    const gruplar = {};
+    yakitLoglari.forEach(log => {
+        if(!log.km) return;
+        if(!gruplar[log.tur]) gruplar[log.tur] = [];
+        gruplar[log.tur].push(log);
+    });
+    const sonuc = {};
+    Object.keys(gruplar).forEach(tur => {
+        const kayitlar = gruplar[tur].slice().sort((a, b) => a.km - b.km);
+        let toplamMesafe = 0, toplamLitre = 0, adet = 0;
+        for(let i = 1; i < kayitlar.length; i++) {
+            const mesafe = kayitlar[i].km - kayitlar[i - 1].km;
+            if(mesafe > 0) { toplamMesafe += mesafe; toplamLitre += kayitlar[i].litre; adet++; }
+        }
+        if(adet > 0 && toplamLitre > 0) {
+            sonuc[tur] = {
+                litrePer100km: (toplamLitre / toplamMesafe) * 100,
+                kmPerLitre: toplamMesafe / toplamLitre,
+                toplamMesafe, toplamLitre,
+            };
+        }
+    });
+    return sonuc;
+}
+
+function genelTuketimHesapla() {
+    const kayitlar = yakitLoglari.filter(l => l.km).slice().sort((a, b) => a.km - b.km);
+    let toplamMesafe = 0, toplamLitre = 0;
+    for(let i = 1; i < kayitlar.length; i++) {
+        const mesafe = kayitlar[i].km - kayitlar[i - 1].km;
+        if(mesafe > 0) { toplamMesafe += mesafe; toplamLitre += kayitlar[i].litre; }
+    }
+    return toplamMesafe > 0 ? (toplamLitre / toplamMesafe) * 100 : 0;
+}
+
+function turIstatistikleriniCiz() {
+    const turler = turIstatistikleriniHesapla();
+    const el = document.getElementById('tur-istatistikleri');
+    const anahtarlar = Object.keys(turler);
+    if(anahtarlar.length === 0) {
+        el.innerHTML = 'Yeterli veri yok (aynı yakıt türünden en az 2 dolum ve km bilgisi gerekli).';
+        return;
+    }
+    el.innerHTML = anahtarlar.map(tur => {
+        const s = turler[tur];
+        return `<div style="padding:10px 4px; border-bottom:1px solid #f1f5f9;">
+            <div style="font-weight:800; color:var(--text-main); margin-bottom:4px; font-size:13px;">${tur}</div>
+            <div style="display:flex; justify-content:space-between; font-size:12px;">
+                <span>Tüketim: <b style="color:var(--primary);">${s.litrePer100km.toFixed(1)} Lt/100km</b></span>
+                <span>1 Lt ile: <b style="color:var(--primary);">${s.kmPerLitre.toFixed(1)} km</b></span>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Toplam ${s.toplamMesafe.toFixed(0)} km · ${s.toplamLitre.toFixed(1)} Lt üzerinden hesaplandı</div>
+        </div>`;
+    }).join('');
 }
 
 function istatistikleriGuncelle() {
@@ -884,14 +1073,16 @@ function istatistikleriGuncelle() {
         toplamTutar += log.tutar;
         toplamLitre += log.litre;
         html += `<div style="padding:8px 4px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
-            <div><b>${log.tarih}</b> - ${log.istasyon} (${log.tur})<br><small style="color:var(--text-muted);">${log.litre} Lt | ${log.tutar} ₺</small></div>
+            <div><b>${log.tarih}</b> - ${log.istasyon} (${log.tur})<br><small style="color:var(--text-muted);">${log.litre} Lt | ${log.tutar} ₺${log.km ? ' | ' + log.km + ' km' : ''}</small></div>
             <button onclick="kayitSil(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:bold;">Sil</button>
         </div>`;
     });
     document.getElementById('stat-toplam-tutar').innerText = toplamTutar.toFixed(2) + ' ₺';
     document.getElementById('stat-toplam-litre').innerText = toplamLitre.toFixed(1) + ' Lt';
-    document.getElementById('stat-ort-tuketim').innerText = toplamLitre > 0 ? (toplamTutar / toplamLitre).toFixed(2) + ' ₺/Lt' : '0.0';
+    const genelTuketim = genelTuketimHesapla();
+    document.getElementById('stat-ort-tuketim').innerText = genelTuketim > 0 ? genelTuketim.toFixed(1) + ' Lt/100km' : '0.0 Lt/100km';
     document.getElementById('yakit-gecmis-listesi').innerHTML = html || 'Henüz yakıt alımı kaydedilmemiş.';
+    turIstatistikleriniCiz();
 }
 
 function kayitSil(idx) {
