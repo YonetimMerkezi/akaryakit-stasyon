@@ -202,12 +202,12 @@ def _session_olustur(referer_url: str = '') -> requests.Session:
     return s
 
 
-# ─── Kaynak 0: Cloudflare Worker (akaryakit.org) ──────────────────────────────
+# ─── Kaynak 0: Cloudflare Worker (doviz.com scraper) ─────────────────────────
 
 def _worker_cek(il: str) -> tuple[list | None, str]:
     """
-    Cloudflare Worker üzerinden akaryakit.org'dan il bazlı firma fiyatlarını çeker.
-    Worker, CORS ve bot-koruması sorunlarını aşmak için proxy görevi görür.
+    Cloudflare Worker üzerinden doviz.com'dan il bazlı firma fiyatlarını çeker.
+    Worker JSON formatı: { error: bool, istasyonlar: [{dagitici, benzin, motorin, lpg, tarih}] }
     Ortam değişkeni: WORKER_URL (örn: https://xxx.workers.dev)
     """
     if not WORKER_URL:
@@ -216,34 +216,34 @@ def _worker_cek(il: str) -> tuple[list | None, str]:
         slug = IL_SLUG_MAP.get(il.lower(), il.lower())
         r = requests.get(
             WORKER_URL,
-            params={'il': slug, 'mod': 'detay'},
-            timeout=10,
+            params={'il': slug, 'ilce': 'merkez'},
+            timeout=15,
         )
         if r.status_code != 200:
             logger.warning('Worker HTTP %d', r.status_code)
             return None, ''
 
         data = r.json()
-        if not data.get('basari'):
-            logger.warning('Worker başarısız yanıt: %s', data.get('hata'))
+        if data.get('error'):
+            logger.warning('Worker hata döndü: %s', data.get('message'))
             return None, ''
 
         markalar = []
-        for m in data.get('markalar', []):
-            benzin = m.get('benzin')
-            motorin = m.get('motorin')
-            lpg = m.get('lpg')
-            firma = (m.get('firma') or '').strip()
+        for m in data.get('istasyonlar', []):
+            firma = (m.get('dagitici') or '').strip()
+            benzin  = _fiyat_parse(m.get('benzin')  or '')
+            motorin = _fiyat_parse(m.get('motorin') or '')
+            lpg     = _fiyat_parse(m.get('lpg')     or '')
             if firma and (benzin or motorin):
                 markalar.append({
-                    'firma': firma,
-                    'benzin': benzin,
+                    'firma':   firma,
+                    'benzin':  benzin,
                     'motorin': motorin,
-                    'lpg': lpg,
+                    'lpg':     lpg,
                 })
 
         if markalar:
-            return markalar, 'akaryakit.org (Worker)'
+            return markalar, 'doviz.com (Worker)'
     except Exception as e:
         logger.error('Worker hatası: %s', e)
     return None, ''
@@ -608,12 +608,12 @@ _TEK_MARKALI_KAYNAKLAR = [
 ]
 
 _YEDEK_FIYATLAR = [
-    {'firma': 'Petrol Ofisi', 'benzin': 62.90, 'motorin': 65.98, 'lpg': 31.81},
-    {'firma': 'Shell', 'benzin': 62.92, 'motorin': 65.98, 'lpg': 34.29},
-    {'firma': 'Opet', 'benzin': 62.89, 'motorin': 65.95, 'lpg': 28.04},
-    {'firma': 'TotalEnergies', 'benzin': 62.92, 'motorin': 65.98, 'lpg': 26.07},
-    {'firma': 'Alpet', 'benzin': 62.88, 'motorin': 65.92, 'lpg': 26.07},
-    {'firma': 'Aytemiz', 'benzin': 62.85, 'motorin': 65.90, 'lpg': 28.00},
+    {'firma': 'Petrol Ofisi', 'benzin': 69.68, 'motorin': 81.31, 'lpg': 31.81},
+    {'firma': 'Shell',        'benzin': 69.65, 'motorin': 81.32, 'lpg': 34.29},
+    {'firma': 'Opet',         'benzin': 69.61, 'motorin': 81.32, 'lpg': None},
+    {'firma': 'Total',        'benzin': 69.63, 'motorin': 81.33, 'lpg': None},
+    {'firma': 'Alpet',        'benzin': 69.63, 'motorin': 81.27, 'lpg': None},
+    {'firma': 'Aytemiz',      'benzin': 69.57, 'motorin': 81.31, 'lpg': None},
 ]
 
 
