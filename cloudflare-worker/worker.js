@@ -1,6 +1,14 @@
-// Cloudflare Worker - Akaryakıt Fiyatları
+// Cloudflare Worker - Türkiye geneli Akaryakıt Fiyatları
 // Kaynak: doviz.com
-// Kullanım: ?il=elazig&ilce=merkez
+//
+// KULLANIM: ?il=<il adı>&ilce=<ilçe adı> ile herhangi bir il/ilçe sorgulanabilir.
+// Parametre verilmezse varsayılan olarak Elazığ/Merkez döner.
+//
+// ÖZEL DURUM - İSTANBUL: doviz.com İstanbul'u tek il olarak değil,
+// "İstanbul Avrupa" ve "İstanbul Anadolu" diye İKİ AYRI il gibi ele alıyor.
+// Bu yüzden İstanbul için normal "İstanbul" adı ÇALIŞMAZ - açıkça
+// "İstanbul Avrupa" veya "İstanbul Anadolu" gönderilmeli
+// (ör. ?il=İstanbul Anadolu&ilce=Kadıköy).
 
 export default {
   async fetch(request) {
@@ -9,60 +17,81 @@ export default {
     }
 
     const url = new URL(request.url);
-    const il    = url.searchParams.get("il")    || "elazig";
-    const ilce  = url.searchParams.get("ilce")  || "merkez";
+    const ilInput = url.searchParams.get("il") || "Elazığ";
+    const ilceInput = url.searchParams.get("ilce") || "Merkez";
 
-    // Türkçe karakter → URL uyumlu slug
-    const slug = (s) => s
-      .toLowerCase()
-      .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
-      .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c")
-      .replace(/\s+/g, "-");
-
-    const ilSlug   = slug(il);
-    const ilceSlug = slug(ilce);
-    const hedefUrl = `https://www.doviz.com/akaryakit-fiyatlari/${ilSlug}/${ilceSlug}`;
+    const ilSlug = slugify(ilInput);
+    const ilceSlug = slugify(ilceInput);
 
     try {
-      const res = await fetch(hedefUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "tr-TR,tr;q=0.9",
-        },
-      });
+      const res = await fetch(
+        `https://www.doviz.com/akaryakit-fiyatlari/${ilSlug}/${ilceSlug}`,
+        {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "tr-TR,tr;q=0.9",
+          },
+          cf: { cacheTtl: 0, cacheEverything: false },
+        }
+      );
 
       if (!res.ok) {
-        return jsonResponse({ error: true, message: `HTTP ${res.status}`, url: hedefUrl }, 500);
+        return jsonResponse(
+          { error: true, message: `HTTP ${res.status} - il/ilçe adını kontrol edin`, il: ilInput, ilce: ilceInput },
+          500,
+        );
       }
 
       const html = await res.text();
       const istasyonlar = parseAkaryakit(html);
 
       if (istasyonlar.length === 0) {
-        return jsonResponse({ error: true, message: "Veri parse edilemedi", url: hedefUrl }, 500);
+        return jsonResponse(
+          { error: true, message: "Veri parse edilemedi (il/ilçe adı doviz.com'da bulunamamış olabilir)", il: ilInput, ilce: ilceInput },
+          500,
+        );
       }
-
-      // Sayfa başlığından il/ilçe adını al
-      const baslikMatch = html.match(/<h1[^>]*class="page-title"[^>]*>([^<]+)<\/h1>/);
-      const baslik = baslikMatch ? baslikMatch[1].trim() : `${il} / ${ilce}`;
 
       return jsonResponse({
         error: false,
         guncelleme: new Date().toISOString(),
-        baslik,
-        il: ilSlug,
-        ilce: ilceSlug,
+        il: ilInput,
+        ilce: ilceInput,
         istasyonlar,
       });
 
     } catch (err) {
-      return jsonResponse({ error: true, message: err.message }, 500);
+      return jsonResponse({ error: true, message: err.message, il: ilInput, ilce: ilceInput }, 500);
     }
   },
 };
 
-// ── Parser ────────────────────────────────────────────────────
+/**
+ * Türkçe bir il/ilçe adını doviz.com'un beklediği URL segmentine (slug)
+ * çevirir: küçük harfe indirir, Türkçe karakterleri sadeleştirir, boşlukları
+ * tire yapar. Örn: "Kırıkkale" -> "kirikkale", "İstanbul Anadolu" -> "istanbul-anadolu".
+ * @param {string} text
+ * @returns {string}
+ */
+function slugify(text) {
+  const CHAR_MAP = {
+    'ı': 'i', 'İ': 'i', 'I': 'i',
+    'ğ': 'g', 'Ğ': 'g',
+    'ü': 'u', 'Ü': 'u',
+    'ş': 's', 'Ş': 's',
+    'ö': 'o', 'Ö': 'o',
+    'ç': 'c', 'Ç': 'c',
+  };
+  return text
+    .trim()
+    .split('')
+    .map((ch) => CHAR_MAP[ch] ?? ch)
+    .join('')
+    .toLowerCase()
+    .replace(/\s+/g, '-');
+}
+
 function parseAkaryakit(html) {
   const istasyonlar = [];
 
@@ -102,7 +131,6 @@ function parseAkaryakit(html) {
   return istasyonlar;
 }
 
-// ── Yardımcı ─────────────────────────────────────────────────
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -116,6 +144,7 @@ function jsonResponse(data, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
       ...corsHeaders(),
     },
   });
